@@ -103,7 +103,8 @@ function Page() {
       <Tabs defaultValue="visao-geral" className="space-y-6">
         <TabsList className="bg-secondary/50 border border-border/50">
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
-          <TabsTrigger value="importacao">Importação Inteligente</TabsTrigger>
+          <TabsTrigger value="importacao">Importação (Arquivo)</TabsTrigger>
+          <TabsTrigger value="manual">Importação (Copiar/Colar)</TabsTrigger>
         </TabsList>
         
         <TabsContent value="visao-geral" className="space-y-6 mt-0">
@@ -204,7 +205,11 @@ function Page() {
       </TabsContent>
 
       <TabsContent value="importacao" className="mt-0">
-        <ImportacaoInteligente onImportDone={() => { invalidate(); document.querySelector<HTMLButtonElement>('[data-value="visao-geral"]')?.click(); }} />
+        <Importador onImportDone={() => { invalidate(); document.querySelector<HTMLButtonElement>('[data-value="visao-geral"]')?.click(); }} mode="file" />
+      </TabsContent>
+
+      <TabsContent value="manual" className="mt-0">
+        <Importador onImportDone={() => { invalidate(); document.querySelector<HTMLButtonElement>('[data-value="visao-geral"]')?.click(); }} mode="manual" />
       </TabsContent>
       </Tabs>
 
@@ -308,11 +313,20 @@ function MovDialog({ item, onOpenChange, onSubmit, loading }: {
   );
 }
 
-function ImportacaoInteligente({ onImportDone }: { onImportDone: () => void }) {
+const ERP_TEMPLATES: Record<string, Record<string, string>> = {
+  Bling: { "Código": "codigo", "Descrição": "nome", "Unidade": "unidade", "Preço": "preco_venda", "Preço de Custo": "preco_custo", "Estoque": "quantidade", "Categoria": "categoria" },
+  ContaAzul: { "Código do Item": "codigo", "Nome do Item": "nome", "Unidade de Medida": "unidade", "Valor de Venda": "preco_venda", "Custo": "preco_custo", "Quantidade em Estoque": "quantidade", "Categoria do Item": "categoria" },
+  Tiny: { "Código SKU": "codigo", "Nome": "nome", "Unidade": "unidade", "Preço Venda": "preco_venda", "Preço Custo": "preco_custo", "Saldo": "quantidade", "Categoria": "categoria" },
+  MarketUP: { "Código Interno": "codigo", "Descrição do Item": "nome", "Unidade": "unidade", "Preço Venda": "preco_venda", "Preço Custo": "preco_custo", "Estoque Atual": "quantidade", "Subcategoria": "categoria" }
+};
+
+function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "file" | "manual" }) {
   const [file, setFile] = useState<File | null>(null);
+  const [rawText, setRawText] = useState("");
   const [rawData, setRawData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [erpTemplate, setErpTemplate] = useState<string>("auto");
   
   const bImport = useServerFn(bulkImportEstoque);
   const mBulk = useMutation({
@@ -321,6 +335,7 @@ function ImportacaoInteligente({ onImportDone }: { onImportDone: () => void }) {
       toast.success("Importação concluída com sucesso!"); 
       onImportDone();
       setFile(null);
+      setRawText("");
       setRawData([]);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -337,41 +352,53 @@ function ImportacaoInteligente({ onImportDone }: { onImportDone: () => void }) {
     { key: "unidade", label: "Unidade (un, kg, l)" }
   ];
 
+  const applyMapping = (cols: string[], template: string) => {
+    setErpTemplate(template);
+    const newMapping: Record<string, string> = {};
+    if (template === "auto") {
+      const normalized = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      cols.forEach(col => {
+        const norm = normalized(col);
+        if (norm.includes("nome") || norm.includes("produto") || norm.includes("descricao")) newMapping[col] = "nome";
+        else if (norm.includes("cod") || norm.includes("sku")) newMapping[col] = "codigo";
+        else if (norm.includes("cat") || norm.includes("grupo")) newMapping[col] = "categoria";
+        else if (norm.includes("qtd") || norm.includes("quant") || norm.includes("estoque") || norm.includes("saldo")) newMapping[col] = "quantidade";
+        else if (norm.includes("custo")) newMapping[col] = "preco_custo";
+        else if (norm.includes("venda") || norm.includes("preco") || norm.includes("valor")) newMapping[col] = "preco_venda";
+        else if (norm.includes("fornec")) newMapping[col] = "fornecedor";
+        else if (norm.includes("unid")) newMapping[col] = "unidade";
+      });
+    } else {
+      const tpl = ERP_TEMPLATES[template];
+      if (tpl) {
+        cols.forEach(col => {
+          if (tpl[col]) newMapping[col] = tpl[col];
+        });
+      }
+    }
+    setMapping(newMapping);
+  };
+
+  const processParsed = (results: Papa.ParseResult<any>) => {
+    if (!results.meta.fields) {
+      toast.error("Não foi possível ler as colunas. Verifique o formato do arquivo ou texto.");
+      return;
+    }
+    setColumns(results.meta.fields);
+    setRawData(results.data);
+    applyMapping(results.meta.fields, "auto");
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
-    
-    Papa.parse(f, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (!results.meta.fields) {
-          toast.error("Não foi possível ler as colunas do arquivo.");
-          return;
-        }
-        setColumns(results.meta.fields);
-        setRawData(results.data);
-        
-        // Auto-Mapeamento Inteligente
-        const newMapping: Record<string, string> = {};
-        const normalized = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        
-        results.meta.fields.forEach(col => {
-          const norm = normalized(col);
-          if (norm.includes("nome") || norm.includes("produto") || norm.includes("descricao")) newMapping[col] = "nome";
-          else if (norm.includes("cod") || norm.includes("sku")) newMapping[col] = "codigo";
-          else if (norm.includes("cat") || norm.includes("grupo")) newMapping[col] = "categoria";
-          else if (norm.includes("qtd") || norm.includes("quant") || norm.includes("estoque")) newMapping[col] = "quantidade";
-          else if (norm.includes("custo")) newMapping[col] = "preco_custo";
-          else if (norm.includes("venda") || norm.includes("preco") || norm.includes("valor")) newMapping[col] = "preco_venda";
-          else if (norm.includes("fornec")) newMapping[col] = "fornecedor";
-          else if (norm.includes("unid")) newMapping[col] = "unidade";
-        });
-        
-        setMapping(newMapping);
-      }
-    });
+    Papa.parse(f, { header: true, skipEmptyLines: true, complete: processParsed });
+  };
+
+  const handleTextParse = () => {
+    if (!rawText.trim()) return;
+    Papa.parse(rawText.trim(), { header: true, skipEmptyLines: true, complete: processParsed });
   };
 
   const executeImport = () => {
@@ -399,41 +426,72 @@ function ImportacaoInteligente({ onImportDone }: { onImportDone: () => void }) {
         }
       });
       return item;
-    }).filter(item => item.nome); // descarta vazios
+    }).filter(item => item.nome);
 
     mBulk.mutate(payload);
   };
 
-  if (!file) {
-    return (
-      <div className="glass rounded-2xl p-10 flex flex-col items-center justify-center text-center border border-dashed border-primary/30">
-        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-          <Upload className="h-8 w-8 text-primary" />
+  if (rawData.length === 0) {
+    if (mode === "file") {
+      return (
+        <div className="glass rounded-2xl p-10 flex flex-col items-center justify-center text-center border border-dashed border-primary/30">
+          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <Upload className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground">Importação via Arquivo (.csv)</h3>
+          <p className="text-sm text-muted-foreground max-w-md mt-2 mb-6">
+            Faça upload do arquivo gerado pelo seu ERP antigo. Mapearemos as colunas automaticamente.
+          </p>
+          <Button onClick={() => document.getElementById("csv-upload")?.click()}>Selecionar Arquivo CSV</Button>
+          <input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
         </div>
-        <h3 className="text-lg font-semibold text-foreground">Importação Inteligente via CSV</h3>
-        <p className="text-sm text-muted-foreground max-w-md mt-2 mb-6">
-          Importe facilmente seu estoque de outros sistemas. Nosso algoritmo tentará reconhecer automaticamente suas colunas.
-        </p>
-        <Button onClick={() => document.getElementById("csv-upload")?.click()}>Selecionar Arquivo CSV</Button>
-        <input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
-      </div>
-    );
+      );
+    } else {
+      return (
+        <div className="glass rounded-2xl p-6">
+          <h3 className="text-lg font-semibold mb-2">Importação Manual (Copiar e Colar)</h3>
+          <p className="text-sm text-muted-foreground mb-4">Copie os dados do seu Excel, Sheets ou Bloco de Notas e cole aqui.</p>
+          <Textarea 
+             className="min-h-[250px] font-mono text-xs mb-4 bg-secondary/30" 
+             placeholder="Cole aqui... (ex:&#10;Nome do Produto &#9; Preço Venda &#9; Estoque&#10;Óleo Motul 10W40 &#9; 89,90 &#9; 12)"
+             value={rawText}
+             onChange={e => setRawText(e.target.value)}
+          />
+          <Button onClick={handleTextParse}>Analisar Tabela</Button>
+        </div>
+      );
+    }
   }
+
+  const validCount = rawData.filter(r => {
+     const nomeCol = Object.keys(mapping).find(k => mapping[k] === "nome");
+     return nomeCol && r[nomeCol]?.trim();
+  }).length;
 
   return (
     <div className="space-y-6">
-      <div className="glass rounded-2xl p-6 flex items-center justify-between">
+      <div className="glass rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
             <FileSpreadsheet className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h3 className="font-semibold">{file.name}</h3>
-            <p className="text-sm text-muted-foreground">{rawData.length} linhas encontradas</p>
+            <h3 className="font-semibold">{mode === "file" ? file?.name : "Dados Colados"}</h3>
+            <p className="text-sm text-muted-foreground">{rawData.length} linhas ({validCount} válidas para importar)</p>
           </div>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => { setFile(null); setRawData([]); }}>Cancelar</Button>
+        
+        <div className="flex items-center gap-3">
+          <select 
+             value={erpTemplate} 
+             onChange={e => applyMapping(columns, e.target.value)}
+             className="rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+          >
+            <option value="auto">Mapeamento Inteligente (Genérico)</option>
+            {Object.keys(ERP_TEMPLATES).map(k => <option key={k} value={k}>Padrão {k}</option>)}
+          </select>
+          
+          <Button variant="outline" onClick={() => { setFile(null); setRawText(""); setRawData([]); }}>Cancelar</Button>
           <Button onClick={executeImport} disabled={mBulk.isPending} className="gap-2">
             <Check className="h-4 w-4" /> {mBulk.isPending ? "Importando..." : "Confirmar Importação"}
           </Button>
@@ -441,26 +499,37 @@ function ImportacaoInteligente({ onImportDone }: { onImportDone: () => void }) {
       </div>
 
       <div className="glass rounded-2xl p-6">
-        <h3 className="font-medium mb-4">Mapeamento de Colunas</h3>
-        <p className="text-sm text-muted-foreground mb-6">Revise as colunas detectadas e associe aos campos do sistema.</p>
+        <h3 className="font-medium mb-4">Mapeamento e Pré-visualização</h3>
         
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {columns.map(col => (
-            <div key={col} className="space-y-2 border border-border/50 bg-secondary/30 rounded-xl p-4">
-              <div className="text-sm font-medium text-foreground">{col}</div>
-              <div className="text-xs text-muted-foreground truncate mb-2">Ex: {rawData[0]?.[col]}</div>
-              <select 
-                value={mapping[col] || ""} 
-                onChange={e => setMapping(prev => ({...prev, [col]: e.target.value}))}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-              >
-                <option value="">(Ignorar)</option>
-                {sysFields.map(f => (
-                  <option key={f.key} value={f.key}>{f.label}</option>
+        <div className="overflow-x-auto border border-border/50 rounded-xl mb-6">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-secondary/50">
+              <tr>
+                {columns.map(col => (
+                  <th key={col} className="p-3 font-medium min-w-[150px]">
+                    <div className="mb-2 text-muted-foreground">{col}</div>
+                    <select 
+                      value={mapping[col] || ""} 
+                      onChange={e => setMapping(prev => ({...prev, [col]: e.target.value}))}
+                      className="w-full rounded bg-background border border-border px-2 py-1 text-xs"
+                    >
+                      <option value="">(Ignorar coluna)</option>
+                      {sysFields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    </select>
+                  </th>
                 ))}
-              </select>
-            </div>
-          ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {rawData.slice(0, 3).map((row, i) => (
+                <tr key={i} className="hover:bg-secondary/20">
+                  {columns.map(col => (
+                    <td key={col} className="p-3 text-xs truncate max-w-[200px]">{row[col]}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
