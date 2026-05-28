@@ -80,3 +80,18 @@ export const createMovimentacao = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+const BulkImportInput = z.array(ItemInput);
+export type BulkImportInputType = z.infer<typeof BulkImportInput>;
+
+export const bulkImportEstoque = createServerFn({ method: "POST" })
+  .inputValidator((d: BulkImportInputType) => BulkImportInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    // Opcional: Lidar com batches menores se array for muito grande (ex > 1000)
+    // Aqui assumiremos batches de até 500 no client side, então podemos fazer um insert só.
+    const cleanedData = data.map(clean);
+    const { error } = await supabase.from("estoque_itens").insert(cleanedData);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });

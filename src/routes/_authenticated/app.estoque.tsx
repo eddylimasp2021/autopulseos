@@ -14,7 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { listEstoque, createEstoqueItem, updateEstoqueItem, deleteEstoqueItem, createMovimentacao } from "@/lib/estoque.functions";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Upload, FileSpreadsheet, Check } from "lucide-react";
+import Papa from "papaparse";
+import { listEstoque, createEstoqueItem, updateEstoqueItem, deleteEstoqueItem, createMovimentacao, bulkImportEstoque } from "@/lib/estoque.functions";
 
 export const Route = createFileRoute("/_authenticated/app/estoque")({ component: Page });
 
@@ -97,7 +100,14 @@ function Page() {
         </button>
       </motion.div>
 
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="grid gap-4 md:grid-cols-4">
+      <Tabs defaultValue="visao-geral" className="space-y-6">
+        <TabsList className="bg-secondary/50 border border-border/50">
+          <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
+          <TabsTrigger value="importacao">Importação Inteligente</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="visao-geral" className="space-y-6 mt-0">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="grid gap-4 md:grid-cols-4">
         {[
           { label: "Total de itens", value: String(produtos.length), icon: Package, color: "text-primary" },
           { label: "Alertas de estoque", value: String(alertas.length), icon: AlertTriangle, color: "text-warning" },
@@ -191,6 +201,12 @@ function Page() {
         {isLoading && <div className="p-10 text-center text-muted-foreground text-sm">Carregando…</div>}
         {!isLoading && produtos.length === 0 && <div className="p-10 text-center text-muted-foreground text-sm">Nenhum item cadastrado.</div>}
       </div>
+      </TabsContent>
+
+      <TabsContent value="importacao" className="mt-0">
+        <ImportacaoInteligente onImportDone={() => { invalidate(); document.querySelector<HTMLButtonElement>('[data-value="visao-geral"]')?.click(); }} />
+      </TabsContent>
+      </Tabs>
 
       <ItemDialog open={openForm || !!editing} onOpenChange={(v) => { if (!v) { setOpenForm(false); setEditing(null); } }}
         initial={editing} loading={mCreate.isPending || mUpdate.isPending}
@@ -289,5 +305,164 @@ function MovDialog({ item, onOpenChange, onSubmit, loading }: {
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ImportacaoInteligente({ onImportDone }: { onImportDone: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [rawData, setRawData] = useState<any[]>([]);
+  const [columns, setColumns] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  
+  const bImport = useServerFn(bulkImportEstoque);
+  const mBulk = useMutation({
+    mutationFn: (d: any[]) => bImport({ data: d }),
+    onSuccess: () => { 
+      toast.success("Importação concluída com sucesso!"); 
+      onImportDone();
+      setFile(null);
+      setRawData([]);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const sysFields = [
+    { key: "nome", label: "Nome do Produto" },
+    { key: "codigo", label: "Código / SKU" },
+    { key: "categoria", label: "Categoria" },
+    { key: "quantidade", label: "Estoque Atual" },
+    { key: "preco_custo", label: "Preço de Custo" },
+    { key: "preco_venda", label: "Preço de Venda" },
+    { key: "fornecedor", label: "Fornecedor" },
+    { key: "unidade", label: "Unidade (un, kg, l)" }
+  ];
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    
+    Papa.parse(f, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (!results.meta.fields) {
+          toast.error("Não foi possível ler as colunas do arquivo.");
+          return;
+        }
+        setColumns(results.meta.fields);
+        setRawData(results.data);
+        
+        // Auto-Mapeamento Inteligente
+        const newMapping: Record<string, string> = {};
+        const normalized = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
+        results.meta.fields.forEach(col => {
+          const norm = normalized(col);
+          if (norm.includes("nome") || norm.includes("produto") || norm.includes("descricao")) newMapping[col] = "nome";
+          else if (norm.includes("cod") || norm.includes("sku")) newMapping[col] = "codigo";
+          else if (norm.includes("cat") || norm.includes("grupo")) newMapping[col] = "categoria";
+          else if (norm.includes("qtd") || norm.includes("quant") || norm.includes("estoque")) newMapping[col] = "quantidade";
+          else if (norm.includes("custo")) newMapping[col] = "preco_custo";
+          else if (norm.includes("venda") || norm.includes("preco") || norm.includes("valor")) newMapping[col] = "preco_venda";
+          else if (norm.includes("fornec")) newMapping[col] = "fornecedor";
+          else if (norm.includes("unid")) newMapping[col] = "unidade";
+        });
+        
+        setMapping(newMapping);
+      }
+    });
+  };
+
+  const executeImport = () => {
+    if (!Object.values(mapping).includes("nome")) {
+      toast.error("O campo 'Nome do Produto' é obrigatório no mapeamento.");
+      return;
+    }
+    
+    const parseNumber = (val: any) => {
+      if (!val) return 0;
+      if (typeof val === 'number') return val;
+      const numStr = String(val).replace(/[^0-9,-]/g, "").replace(",", ".");
+      return Number(numStr) || 0;
+    };
+
+    const payload = rawData.map(row => {
+      const item: any = { nome: "", quantidade: 0, preco_custo: 0, preco_venda: 0 };
+      Object.entries(mapping).forEach(([csvCol, sysKey]) => {
+        if (!sysKey || !row[csvCol]) return;
+        const val = row[csvCol];
+        if (["quantidade", "preco_custo", "preco_venda"].includes(sysKey)) {
+          item[sysKey] = parseNumber(val);
+        } else {
+          item[sysKey] = String(val).trim();
+        }
+      });
+      return item;
+    }).filter(item => item.nome); // descarta vazios
+
+    mBulk.mutate(payload);
+  };
+
+  if (!file) {
+    return (
+      <div className="glass rounded-2xl p-10 flex flex-col items-center justify-center text-center border border-dashed border-primary/30">
+        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+          <Upload className="h-8 w-8 text-primary" />
+        </div>
+        <h3 className="text-lg font-semibold text-foreground">Importação Inteligente via CSV</h3>
+        <p className="text-sm text-muted-foreground max-w-md mt-2 mb-6">
+          Importe facilmente seu estoque de outros sistemas. Nosso algoritmo tentará reconhecer automaticamente suas colunas.
+        </p>
+        <Button onClick={() => document.getElementById("csv-upload")?.click()}>Selecionar Arquivo CSV</Button>
+        <input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="glass rounded-2xl p-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
+            <FileSpreadsheet className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold">{file.name}</h3>
+            <p className="text-sm text-muted-foreground">{rawData.length} linhas encontradas</p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => { setFile(null); setRawData([]); }}>Cancelar</Button>
+          <Button onClick={executeImport} disabled={mBulk.isPending} className="gap-2">
+            <Check className="h-4 w-4" /> {mBulk.isPending ? "Importando..." : "Confirmar Importação"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="glass rounded-2xl p-6">
+        <h3 className="font-medium mb-4">Mapeamento de Colunas</h3>
+        <p className="text-sm text-muted-foreground mb-6">Revise as colunas detectadas e associe aos campos do sistema.</p>
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {columns.map(col => (
+            <div key={col} className="space-y-2 border border-border/50 bg-secondary/30 rounded-xl p-4">
+              <div className="text-sm font-medium text-foreground">{col}</div>
+              <div className="text-xs text-muted-foreground truncate mb-2">Ex: {rawData[0]?.[col]}</div>
+              <select 
+                value={mapping[col] || ""} 
+                onChange={e => setMapping(prev => ({...prev, [col]: e.target.value}))}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary outline-none"
+              >
+                <option value="">(Ignorar)</option>
+                {sysFields.map(f => (
+                  <option key={f.key} value={f.key}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
