@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Self bootstrap as mecanico only" ON public.workshop_members;
