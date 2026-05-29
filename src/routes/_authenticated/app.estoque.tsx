@@ -39,6 +39,7 @@ type Item = { id: string; nome: string; codigo: string | null; categoria: string
 
 function Page() {
   const [busca, setBusca] = useState("");
+  const [tab, setTab] = useState("visao-geral");
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const [movItem, setMovItem] = useState<Item | null>(null);
@@ -124,7 +125,7 @@ function Page() {
         </div>
       </motion.div>
 
-      <Tabs defaultValue="visao-geral" className="space-y-6">
+      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
         <TabsList className="bg-secondary/50 border border-border/50">
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="importacao">Importação (Arquivo)</TabsTrigger>
@@ -229,11 +230,11 @@ function Page() {
       </TabsContent>
 
       <TabsContent value="importacao" className="mt-0">
-        <Importador onImportDone={() => { invalidate(); document.querySelector<HTMLButtonElement>('[data-value="visao-geral"]')?.click(); }} mode="file" />
+        <Importador onImportDone={() => { invalidate(); setTab("visao-geral"); }} mode="file" />
       </TabsContent>
 
       <TabsContent value="manual" className="mt-0">
-        <Importador onImportDone={() => { invalidate(); document.querySelector<HTMLButtonElement>('[data-value="visao-geral"]')?.click(); }} mode="manual" />
+        <Importador onImportDone={() => { invalidate(); setTab("visao-geral"); }} mode="manual" />
       </TabsContent>
       </Tabs>
 
