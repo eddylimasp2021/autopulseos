@@ -1,6 +1,11 @@
-import { json } from "@tanstack/react-start";
-import { createAPIFileRoute } from "@tanstack/react-start/api";
+import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+
+const json = (body: unknown, init?: ResponseInit) =>
+  new Response(JSON.stringify(body), {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
 
 // Função para disparar a API da UAZAPI
 async function sendWhatsappMessage(instanceUrl: string, token: string, number: string, text: string) {
@@ -39,8 +44,10 @@ async function sendWhatsappMessage(instanceUrl: string, token: string, number: s
   return await response.json();
 }
 
-export const APIRoute = createAPIFileRoute("/api/public/cron/whatsapp-dispatch")({
-  GET: async ({ request }) => {
+export const Route = createFileRoute("/api/public/cron/whatsapp-dispatch")({
+  server: {
+    handlers: {
+      GET: async ({ request }: { request: Request }) => {
     // 1. Validação simples de segurança (Cron Secret)
     const url = new URL(request.url);
     const cronSecret = process.env.CRON_SECRET || import.meta.env.VITE_CRON_SECRET;
@@ -49,11 +56,11 @@ export const APIRoute = createAPIFileRoute("/api/public/cron/whatsapp-dispatch")
     const authHeader = request.headers.get("Authorization");
     const passedSecret = url.searchParams.get("secret") || (authHeader ? authHeader.replace("Bearer ", "") : null);
 
-    if (cronSecret && passedSecret !== cronSecret) {
-      return json({ error: "Unauthorized" }, { status: 401 });
-    }
+        if (cronSecret && passedSecret !== cronSecret) {
+          return json({ error: "Unauthorized" }, { status: 401 });
+        }
 
-    try {
+        try {
       // 2. Buscar mensagens pendentes no banco (bypassing RLS)
       const { data: mensagens, error: fetchError } = await supabaseAdmin
         .from("whatsapp_mensagens")
@@ -130,9 +137,11 @@ export const APIRoute = createAPIFileRoute("/api/public/cron/whatsapp-dispatch")
         }
       }
 
-      return json({ message: "Processamento concluído", results });
-    } catch (error: any) {
-      return json({ error: error.message }, { status: 500 });
-    }
+          return json({ message: "Processamento concluído", results });
+        } catch (error: any) {
+          return json({ error: error.message }, { status: 500 });
+        }
+      },
+    },
   },
 });
