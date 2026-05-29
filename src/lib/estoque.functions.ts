@@ -88,10 +88,43 @@ export const bulkImportEstoque = createServerFn({ method: "POST" })
   .inputValidator((d: BulkImportInputType) => BulkImportInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context as any;
-    // Opcional: Lidar com batches menores se array for muito grande (ex > 1000)
-    // Aqui assumiremos batches de até 500 no client side, então podemos fazer um insert só.
     const cleanedData = data.map(clean);
-    const { error } = await supabase.from("estoque_itens").insert(cleanedData);
-    if (error) throw new Error(error.message);
-    return { ok: true };
+
+    // Separa itens com código (passíveis de upsert) dos sem código (insert direto)
+    const withCode = cleanedData.filter((r: any) => r.codigo);
+    const withoutCode = cleanedData.filter((r: any) => !r.codigo);
+
+    // Dedup local por código (mantém a última ocorrência) para evitar
+    // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+    const dedupMap = new Map<string, any>();
+    for (const r of withCode) dedupMap.set(r.codigo, r);
+    const dedupedWithCode = Array.from(dedupMap.values());
+
+    let inserted = 0;
+    let updated = 0;
+
+    if (dedupedWithCode.length > 0) {
+      // Upsert por (workshop_id, codigo) — atualiza preços/quantidades se já existir
+      const { error, count } = await supabase
+        .from("estoque_itens")
+        .upsert(dedupedWithCode, { onConflict: "workshop_id,codigo", ignoreDuplicates: false, count: "exact" });
+      if (error) throw new Error(error.message);
+      updated = count ?? dedupedWithCode.length;
+    }
+
+    if (withoutCode.length > 0) {
+      const { error, count } = await supabase
+        .from("estoque_itens")
+        .insert(withoutCode, { count: "exact" });
+      if (error) throw new Error(error.message);
+      inserted = count ?? withoutCode.length;
+    }
+
+    return {
+      ok: true,
+      processados: dedupedWithCode.length + withoutCode.length,
+      duplicadosNoArquivo: withCode.length - dedupedWithCode.length,
+      inseridos: inserted,
+      atualizados: updated,
+    };
   });
