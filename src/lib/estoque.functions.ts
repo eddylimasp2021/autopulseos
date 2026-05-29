@@ -68,9 +68,12 @@ export const deleteEstoqueItem = createServerFn({ method: "POST" })
 const MovInput = z.object({
   item_id: z.string().uuid(),
   tipo: z.enum(["entrada", "saida", "ajuste"]),
-  quantidade: z.coerce.number().positive().max(9999999),
+  quantidade: z.coerce.number().min(0).max(9999999),
   motivo: z.string().trim().max(200).optional().nullable(),
-});
+}).refine(
+  (d) => d.tipo === "ajuste" || d.quantidade > 0,
+  { message: "Quantidade deve ser maior que zero para entrada/saída", path: ["quantidade"] },
+);
 
 export const createMovimentacao = createServerFn({ method: "POST" })
   .inputValidator((d: z.infer<typeof MovInput>) => MovInput.parse(d))
@@ -90,9 +93,15 @@ export const bulkImportEstoque = createServerFn({ method: "POST" })
     const { supabase } = context as any;
     const cleanedData = data.map(clean);
 
+    // Normaliza códigos (trim + uppercase) para evitar duplicatas por variação
+    for (const r of cleanedData as any[]) {
+      if (r.codigo) r.codigo = String(r.codigo).trim().toUpperCase();
+      if (r.codigo === "") r.codigo = null;
+    }
+
     // Separa itens com código (passíveis de upsert) dos sem código (insert direto)
-    const withCode = cleanedData.filter((r: any) => r.codigo);
-    const withoutCode = cleanedData.filter((r: any) => !r.codigo);
+    const withCode = (cleanedData as any[]).filter((r) => r.codigo);
+    const withoutCode = (cleanedData as any[]).filter((r) => !r.codigo);
 
     // Dedup local por código (mantém a última ocorrência) para evitar
     // "ON CONFLICT DO UPDATE command cannot affect row a second time"
