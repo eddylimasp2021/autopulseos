@@ -1,9 +1,16 @@
-import { json } from "@tanstack/react-start";
-import { createAPIFileRoute } from "@tanstack/react-start/api";
+import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-export const APIRoute = createAPIFileRoute("/api/public/cron/daily-reminders")({
-  GET: async ({ request }) => {
+const json = (body: unknown, init?: ResponseInit) =>
+  new Response(JSON.stringify(body), {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
+
+export const Route = createFileRoute("/api/public/cron/daily-reminders")({
+  server: {
+    handlers: {
+      GET: async ({ request }: { request: Request }) => {
     // 1. Validação de segurança idêntica ao dispatch
     const url = new URL(request.url);
     const cronSecret = process.env.CRON_SECRET || import.meta.env.VITE_CRON_SECRET;
@@ -107,5 +114,7 @@ export const APIRoute = createAPIFileRoute("/api/public/cron/daily-reminders")({
     } catch (error: any) {
       return json({ error: error.message }, { status: 500 });
     }
+      },
+    },
   },
 });
