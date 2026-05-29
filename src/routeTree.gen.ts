@@ -25,6 +25,8 @@ import { Route as AuthenticatedAppEstoqueRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAppConfiguracoesRouteImport } from './routes/_authenticated/app.configuracoes'
 import { Route as AuthenticatedAppClientesRouteImport } from './routes/_authenticated/app.clientes'
 import { Route as AuthenticatedAppAgendaRouteImport } from './routes/_authenticated/app.agenda'
+import { Route as ApiPublicCronWhatsappDispatchRouteImport } from './routes/api/public/cron/whatsapp-dispatch'
+import { Route as ApiPublicCronDailyRemindersRouteImport } from './routes/api/public/cron/daily-reminders'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -112,6 +114,18 @@ const AuthenticatedAppAgendaRoute = AuthenticatedAppAgendaRouteImport.update({
   path: '/agenda',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const ApiPublicCronWhatsappDispatchRoute =
+  ApiPublicCronWhatsappDispatchRouteImport.update({
+    id: '/api/public/cron/whatsapp-dispatch',
+    path: '/api/public/cron/whatsapp-dispatch',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicCronDailyRemindersRoute =
+  ApiPublicCronDailyRemindersRouteImport.update({
+    id: '/api/public/cron/daily-reminders',
+    path: '/api/public/cron/daily-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -129,6 +143,8 @@ export interface FileRoutesByFullPath {
   '/app/veiculos': typeof AuthenticatedAppVeiculosRoute
   '/app/whatsapp': typeof AuthenticatedAppWhatsappRoute
   '/app/': typeof AuthenticatedAppIndexRoute
+  '/api/public/cron/daily-reminders': typeof ApiPublicCronDailyRemindersRoute
+  '/api/public/cron/whatsapp-dispatch': typeof ApiPublicCronWhatsappDispatchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -145,6 +161,8 @@ export interface FileRoutesByTo {
   '/app/veiculos': typeof AuthenticatedAppVeiculosRoute
   '/app/whatsapp': typeof AuthenticatedAppWhatsappRoute
   '/app': typeof AuthenticatedAppIndexRoute
+  '/api/public/cron/daily-reminders': typeof ApiPublicCronDailyRemindersRoute
+  '/api/public/cron/whatsapp-dispatch': typeof ApiPublicCronWhatsappDispatchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -164,6 +182,8 @@ export interface FileRoutesById {
   '/_authenticated/app/veiculos': typeof AuthenticatedAppVeiculosRoute
   '/_authenticated/app/whatsapp': typeof AuthenticatedAppWhatsappRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
+  '/api/public/cron/daily-reminders': typeof ApiPublicCronDailyRemindersRoute
+  '/api/public/cron/whatsapp-dispatch': typeof ApiPublicCronWhatsappDispatchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -183,6 +203,8 @@ export interface FileRouteTypes {
     | '/app/veiculos'
     | '/app/whatsapp'
     | '/app/'
+    | '/api/public/cron/daily-reminders'
+    | '/api/public/cron/whatsapp-dispatch'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -199,6 +221,8 @@ export interface FileRouteTypes {
     | '/app/veiculos'
     | '/app/whatsapp'
     | '/app'
+    | '/api/public/cron/daily-reminders'
+    | '/api/public/cron/whatsapp-dispatch'
   id:
     | '__root__'
     | '/'
@@ -217,12 +241,16 @@ export interface FileRouteTypes {
     | '/_authenticated/app/veiculos'
     | '/_authenticated/app/whatsapp'
     | '/_authenticated/app/'
+    | '/api/public/cron/daily-reminders'
+    | '/api/public/cron/whatsapp-dispatch'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicCronDailyRemindersRoute: typeof ApiPublicCronDailyRemindersRoute
+  ApiPublicCronWhatsappDispatchRoute: typeof ApiPublicCronWhatsappDispatchRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -339,6 +367,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppAgendaRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/api/public/cron/whatsapp-dispatch': {
+      id: '/api/public/cron/whatsapp-dispatch'
+      path: '/api/public/cron/whatsapp-dispatch'
+      fullPath: '/api/public/cron/whatsapp-dispatch'
+      preLoaderRoute: typeof ApiPublicCronWhatsappDispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cron/daily-reminders': {
+      id: '/api/public/cron/daily-reminders'
+      path: '/api/public/cron/daily-reminders'
+      fullPath: '/api/public/cron/daily-reminders'
+      preLoaderRoute: typeof ApiPublicCronDailyRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -391,17 +433,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicCronDailyRemindersRoute: ApiPublicCronDailyRemindersRoute,
+  ApiPublicCronWhatsappDispatchRoute: ApiPublicCronWhatsappDispatchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
