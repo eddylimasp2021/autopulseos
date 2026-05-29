@@ -454,11 +454,13 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
       return;
     }
     
-    const parseNumber = (val: any) => {
+    const parseNumber = (val: any, isPrice: boolean) => {
       if (!val) return 0;
-      if (typeof val === 'number') return val;
+      if (typeof val === 'number') return isPrice ? Math.max(0, val) : val;
       const numStr = String(val).replace(/[^0-9,-]/g, "").replace(",", ".");
-      return Number(numStr) || 0;
+      const num = Number(numStr);
+      if (isNaN(num)) return 0;
+      return isPrice ? Math.max(0, num) : num;
     };
 
     const payload = rawData.map(row => {
@@ -466,8 +468,10 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
       Object.entries(mapping).forEach(([csvCol, sysKey]) => {
         if (!sysKey || !row[csvCol]) return;
         const val = row[csvCol];
-        if (["quantidade", "preco_custo", "preco_venda"].includes(sysKey)) {
-          item[sysKey] = parseNumber(val);
+        if (["preco_custo", "preco_venda"].includes(sysKey)) {
+          item[sysKey] = parseNumber(val, true);
+        } else if (sysKey === "quantidade") {
+          item[sysKey] = parseNumber(val, false);
         } else {
           item[sysKey] = String(val).trim();
         }
