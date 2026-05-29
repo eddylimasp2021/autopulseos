@@ -95,9 +95,33 @@ function Page() {
             <p className="text-sm text-muted-foreground mt-1">Controle de peças, entradas e saídas conectado às OS.</p>
           </div>
         </div>
-        <button onClick={() => { setEditing(null); setOpenForm(true); }} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 shadow-[0_0_20px_-4px_oklch(0.65_0.18_240/0.4)]">
-          <Plus className="h-4 w-4" /> Novo item
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => {
+            import("xlsx").then((XLSX) => {
+              const data = produtos.map(p => ({
+                "Nome": p.nome,
+                "Código/SKU": p.codigo || "",
+                "Categoria": p.categoria || "",
+                "Estoque Atual": Number(p.quantidade),
+                "Estoque Mínimo": Number(p.qtd_minima),
+                "Preço de Custo": Number(p.preco_custo),
+                "Preço de Venda": Number(p.preco_venda),
+                "Fornecedor": p.fornecedor || "",
+                "Unidade": p.unidade || "",
+                "Status": Number(p.quantidade) <= Number(p.qtd_minima) ? "Estoque Baixo" : "OK"
+              }));
+              const ws = XLSX.utils.json_to_sheet(data);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, "Estoque");
+              XLSX.writeFile(wb, "estoque_garagemos.xlsx");
+            });
+          }} className="inline-flex items-center gap-2 rounded-xl bg-secondary/80 border border-border/60 px-4 py-2.5 text-sm font-medium hover:bg-secondary transition">
+            <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
+          </button>
+          <button onClick={() => { setEditing(null); setOpenForm(true); }} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 shadow-[0_0_20px_-4px_oklch(0.65_0.18_240/0.4)]">
+            <Plus className="h-4 w-4" /> Novo item
+          </button>
+        </div>
       </motion.div>
 
       <Tabs defaultValue="visao-geral" className="space-y-6">
@@ -393,7 +417,30 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
-    Papa.parse(f, { header: true, skipEmptyLines: true, complete: processParsed });
+    
+    if (f.name.endsWith(".csv")) {
+      Papa.parse(f, { header: true, skipEmptyLines: true, complete: processParsed });
+    } else {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const bstr = evt.target?.result;
+        import("xlsx").then((XLSX) => {
+          const wb = XLSX.read(bstr, { type: "binary" });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const data = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          if (data.length === 0) {
+            toast.error("Planilha vazia ou em formato inválido.");
+            return;
+          }
+          const headers = Object.keys(data[0] as any);
+          setColumns(headers);
+          setRawData(data);
+          applyMapping(headers, "auto");
+        });
+      };
+      reader.readAsBinaryString(f);
+    }
   };
 
   const handleTextParse = () => {
@@ -438,12 +485,12 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
           <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
             <Upload className="h-8 w-8 text-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground">Importação via Arquivo (.csv)</h3>
+          <h3 className="text-lg font-semibold text-foreground">Importação via Arquivo (.xlsx, .csv)</h3>
           <p className="text-sm text-muted-foreground max-w-md mt-2 mb-6">
             Faça upload do arquivo gerado pelo seu ERP antigo. Mapearemos as colunas automaticamente.
           </p>
-          <Button onClick={() => document.getElementById("csv-upload")?.click()}>Selecionar Arquivo CSV</Button>
-          <input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+          <Button onClick={() => document.getElementById("file-upload")?.click()}>Selecionar Arquivo</Button>
+          <input id="file-upload" type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
         </div>
       );
     } else {
