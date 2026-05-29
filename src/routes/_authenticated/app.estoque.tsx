@@ -538,9 +538,9 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
             {Object.keys(ERP_TEMPLATES).map(k => <option key={k} value={k}>Padrão {k}</option>)}
           </select>
           
-          <Button variant="outline" onClick={() => { setFile(null); setRawText(""); setRawData([]); }}>Cancelar</Button>
-          <Button onClick={executeImport} disabled={mBulk.isPending} className="gap-2">
-            <Check className="h-4 w-4" /> {mBulk.isPending ? "Importando..." : "Confirmar Importação"}
+          <Button variant="outline" onClick={() => { setFile(null); setRawText(""); setRawData([]); }} className="hidden md:flex">Cancelar</Button>
+          <Button onClick={executeImport} disabled={mBulk.isPending} className="gap-2 hidden md:flex bg-success hover:bg-success/90 text-success-foreground">
+            <Check className="h-4 w-4" /> {mBulk.isPending ? "Salvando..." : "Salvar no Estoque"}
           </Button>
         </div>
       </div>
@@ -577,6 +577,19 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
               ))}
             </tbody>
           </table>
+        </div>
+        
+        <div className="flex items-center justify-end gap-4 mt-6 pt-6 border-t border-border/50">
+          <div className="text-sm text-muted-foreground mr-auto hidden sm:block">
+            Revise as colunas e clique em salvar para inserir os {validCount} produtos.
+          </div>
+          <Button variant="outline" onClick={() => { setFile(null); setRawText(""); setRawData([]); }}>
+            Cancelar Importação
+          </Button>
+          <Button onClick={executeImport} disabled={mBulk.isPending || validCount === 0} size="lg" className="gap-2 bg-success hover:bg-success/90 text-success-foreground shadow-[0_0_20px_-4px_var(--color-success)]">
+            <Check className="h-5 w-5" /> 
+            {mBulk.isPending ? "Salvando..." : "Salvar no Estoque"}
+          </Button>
         </div>
       </div>
     </div>
