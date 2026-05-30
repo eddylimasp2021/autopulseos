@@ -120,6 +120,25 @@ function Page() {
   const removeItem = (id: string) => setCart(prev => prev.filter(x => x.id !== id));
   const limparCarrinho = () => { setCart([]); setDescontoStr(""); setRecebidoStr(""); setObservacao(""); };
 
+  const onBuscaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (!busca.trim()) return;
+      
+      // Procura primeiro pelo código de barras exato
+      const exato = (produtos as Produto[]).find(p => p.codigo?.toLowerCase() === busca.toLowerCase().trim());
+      // Se não achar código exato, vê se o filtro deixou apenas 1 produto na tela
+      const p = exato || (catalogo.length === 1 ? catalogo[0] : null);
+      
+      if (p) {
+        addToCart(p);
+        setBusca("");
+      } else {
+        toast.error("Produto não encontrado ou busca ambígua.");
+      }
+    }
+  };
+
   const mFinalizar = useMutation({
     mutationFn: () => finalizar({
       data: {
@@ -278,7 +297,15 @@ function Page() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="lg:col-span-2 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input ref={buscaRef} autoFocus value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto por nome ou código (F2)" className="w-full rounded-xl border border-border bg-secondary/50 pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+            <input 
+              ref={buscaRef} 
+              autoFocus 
+              value={busca} 
+              onChange={e => setBusca(e.target.value)} 
+              onKeyDown={onBuscaKeyDown}
+              placeholder="Buscar produto ou bipar código (F2)" 
+              className="w-full rounded-xl border border-border bg-secondary/50 pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30" 
+            />
           </div>
 
           {categorias.length > 0 && (
