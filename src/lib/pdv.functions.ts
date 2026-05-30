@@ -10,6 +10,7 @@ const Item = z.object({
 
 const FinalizarInput = z.object({
   cliente_id: z.string().uuid().nullable().optional(),
+  caixa_id: z.string().uuid(),
   forma_pagamento: z.enum(["pix", "dinheiro", "cartao_credito", "cartao_debito"]),
   desconto: z.coerce.number().min(0).max(99999999).optional().default(0),
   valor_recebido: z.coerce.number().min(0).max(99999999).optional().nullable(),
@@ -59,6 +60,7 @@ export const finalizarVenda = createServerFn({ method: "POST" })
         status: "pago",
         forma_pagamento: data.forma_pagamento === "cartao_credito" || data.forma_pagamento === "cartao_debito" ? "cartao" : data.forma_pagamento,
         cliente_id: data.cliente_id ?? null,
+        caixa_id: data.caixa_id,
       })
       .select()
       .single();
@@ -80,4 +82,83 @@ export const finalizarVenda = createServerFn({ method: "POST" })
       ? Math.max(0, Number(data.valor_recebido) - total)
       : 0;
     return { ok: true, total, subtotal, desconto, troco, lancamento_id: lanc.id };
+  });
+
+export const verificarCaixaAberto = createServerFn({ method: "GET" }).handler(async ({ context }) => {
+  const { supabase } = context as any;
+  const { data, error } = await supabase
+    .from("pdv_caixas")
+    .select("*")
+    .eq("status", "aberto")
+    .limit(1)
+    .single();
+    
+  if (error && error.code !== "PGRST116") throw new Error(error.message);
+  return data || null;
+});
+
+const AbrirCaixaInput = z.object({
+  saldo_abertura: z.coerce.number().min(0),
+});
+
+export const abrirCaixa = createServerFn({ method: "POST" })
+  .inputValidator((d: any) => AbrirCaixaInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    const { data: userResp } = await supabase.auth.getUser();
+    const operador_nome = userResp?.user?.user_metadata?.nome || userResp?.user?.email?.split('@')[0] || "Operador";
+    
+    const { data: existente } = await supabase.from("pdv_caixas").select("id").eq("status", "aberto").limit(1).single();
+    if (existente) throw new Error("Já existe um caixa aberto nesta oficina.");
+
+    const { data: novo, error } = await supabase.from("pdv_caixas").insert({
+      operador_nome,
+      saldo_abertura: data.saldo_abertura
+    }).select().single();
+
+    if (error) throw new Error(error.message);
+    return novo;
+  });
+
+const FecharCaixaInput = z.object({
+  caixa_id: z.string().uuid()
+});
+
+export const fecharCaixa = createServerFn({ method: "POST" })
+  .inputValidator((d: any) => FecharCaixaInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    
+    const { data: lancamentos, error: errLanc } = await supabase
+      .from("financeiro_lancamentos")
+      .select("valor, forma_pagamento")
+      .eq("caixa_id", data.caixa_id);
+    if (errLanc) throw new Error(errLanc.message);
+
+    let totalDinheiro = 0, totalPix = 0, totalCartao = 0;
+    for (const l of (lancamentos || [])) {
+      if (l.forma_pagamento === "dinheiro") totalDinheiro += Number(l.valor);
+      else if (l.forma_pagamento === "pix") totalPix += Number(l.valor);
+      else totalCartao += Number(l.valor);
+    }
+    const totalGeral = totalDinheiro + totalPix + totalCartao;
+
+    const { data: caixa, error } = await supabase
+      .from("pdv_caixas")
+      .update({
+        status: "fechado",
+        saldo_fechamento: totalGeral,
+        data_fechamento: new Date().toISOString()
+      })
+      .eq("id", data.caixa_id)
+      .eq("status", "aberto")
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    
+    return { 
+      ...caixa,
+      resumo: { dinheiro: totalDinheiro, pix: totalPix, cartao: totalCartao, total_vendas: totalGeral }
+    };
   });

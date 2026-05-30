@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet } from "lucide-react";
+import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { listEstoqueParaPDV, finalizarVenda } from "@/lib/pdv.functions";
+import { listEstoqueParaPDV, finalizarVenda, verificarCaixaAberto, abrirCaixa, fecharCaixa } from "@/lib/pdv.functions";
 import { listClientes } from "@/lib/clientes.functions";
-import { imprimirCupomNaoFiscal } from "@/lib/print";
+import { imprimirCupomNaoFiscal, imprimirAberturaCaixa, imprimirFechamentoCaixa } from "@/lib/print";
 
 export const Route = createFileRoute("/_authenticated/app/pdv")({ component: Page });
 
@@ -31,9 +31,18 @@ function Page() {
   const listEst = useServerFn(listEstoqueParaPDV);
   const finalizar = useServerFn(finalizarVenda);
   const listCli = useServerFn(listClientes);
+  
+  // Funções de Caixa
+  const vCaixa = useServerFn(verificarCaixaAberto);
+  const mAbrirCaixa = useServerFn(abrirCaixa);
+  const mFecharCaixa = useServerFn(fecharCaixa);
 
   const { data: produtos = [] } = useQuery({ queryKey: ["pdv-estoque"], queryFn: () => listEst() });
   const { data: clientes = [] } = useQuery({ queryKey: ["clientes"], queryFn: () => listCli() });
+  const { data: caixaAtual, isLoading: loadingCaixa } = useQuery({ queryKey: ["pdv-caixa"], queryFn: () => vCaixa() });
+
+  const [saldoAbertura, setSaldoAbertura] = useState("");
+  const [modalFechamento, setModalFechamento] = useState(false);
 
   const categorias = Array.from(new Set((produtos as Produto[]).map(p => p.categoria).filter(Boolean) as string[]));
   const catalogo = (produtos as Produto[]).filter(p => {
@@ -49,6 +58,37 @@ function Page() {
   const recebido = Number(recebidoStr.replace(",", ".")) || 0;
   const troco = formaPagamento === "dinheiro" ? Math.max(0, recebido - total) : 0;
   const faltaReceber = formaPagamento === "dinheiro" ? Math.max(0, total - recebido) : 0;
+
+  const mAbrir = useMutation({
+    mutationFn: () => mAbrirCaixa({ data: { saldo_abertura: Number(saldoAbertura.replace(",", ".")) || 0 } }),
+    onSuccess: (caixa) => {
+      toast.success("Caixa aberto com sucesso!");
+      imprimirAberturaCaixa(caixa.operador_nome, Number(caixa.saldo_abertura));
+      qc.invalidateQueries({ queryKey: ["pdv-caixa"] });
+    },
+    onError: (e: Error) => toast.error(e.message)
+  });
+
+  const mFechar = useMutation({
+    mutationFn: () => mFecharCaixa({ data: { caixa_id: caixaAtual?.id! } }),
+    onSuccess: (resumo) => {
+      toast.success("Caixa fechado com sucesso!");
+      imprimirFechamentoCaixa({
+        operador: resumo.operador_nome,
+        dataAbertura: resumo.data_abertura,
+        saldoInicial: Number(resumo.saldo_abertura),
+        dinheiro: resumo.resumo.dinheiro,
+        pix: resumo.resumo.pix,
+        cartao: resumo.resumo.cartao,
+        totalVendas: resumo.resumo.total_vendas,
+        saldoFinal: Number(resumo.saldo_abertura) + resumo.resumo.dinheiro
+      });
+      qc.invalidateQueries({ queryKey: ["pdv-caixa"] });
+      setModalFechamento(false);
+      limparCarrinho();
+    },
+    onError: (e: Error) => toast.error(e.message)
+  });
 
   const addToCart = (p: Produto) => {
     if (Number(p.quantidade) <= 0) {
@@ -81,6 +121,7 @@ function Page() {
     mutationFn: () => finalizar({
       data: {
         cliente_id: clienteId || null,
+        caixa_id: caixaAtual?.id!,
         forma_pagamento: formaPagamento,
         desconto,
         valor_recebido: formaPagamento === "dinheiro" ? recebido : null,
@@ -101,7 +142,8 @@ function Page() {
         recebido: recebido,
         troco: r.troco,
         observacao: observacao,
-        data: new Date().toLocaleString("pt-BR")
+        data: new Date().toLocaleString("pt-BR"),
+        operador: caixaAtual?.operador_nome
       });
 
       limparCarrinho(); setClienteId("");
@@ -112,11 +154,48 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const podeFinalizar =
-    cart.length > 0 &&
-    !mFinalizar.isPending &&
-    total > 0 &&
-    (formaPagamento !== "dinheiro" || recebido >= total);
+  if (loadingCaixa) {
+    return <div className="p-8 text-center text-muted-foreground animate-pulse">Carregando módulo PDV...</div>;
+  }
+
+  if (!caixaAtual) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-6">
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-sm w-full">
+          <div className="grid h-20 w-20 place-items-center rounded-3xl bg-[image:var(--gradient-neon)] neon-border mb-6">
+            <Banknote className="h-10 w-10 text-neon-foreground" />
+          </div>
+          <h2 className="text-3xl font-display font-bold">Caixa Fechado</h2>
+          <p className="text-muted-foreground mt-2 text-center">Para iniciar as vendas, você precisa abrir o caixa do dia informando o fundo de troco.</p>
+          
+          <div className="glass p-6 rounded-3xl w-full mt-8 space-y-5">
+            <div>
+              <label className="text-sm font-medium text-foreground">Fundo de Troco Inicial (R$)</label>
+              <input 
+                autoFocus
+                type="text" 
+                inputMode="decimal"
+                value={saldoAbertura} 
+                onChange={e => setSaldoAbertura(e.target.value)}
+                placeholder="Ex: 50,00"
+                className="mt-2 w-full rounded-xl border border-input bg-background/50 px-4 py-3 text-lg tabular-nums outline-none focus:ring-2 focus:ring-primary/40 transition"
+              />
+            </div>
+            <button 
+              onClick={() => mAbrir.mutate()}
+              disabled={mAbrir.isPending}
+              className="w-full rounded-xl bg-primary px-4 py-3.5 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition shadow-[0_0_24px_-4px_oklch(0.65_0.18_240/0.5)] flex items-center justify-center gap-2"
+            >
+              <Banknote className="h-5 w-5" />
+              {mAbrir.isPending ? "Processando..." : "Abrir Caixa"}
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const podeFinalizar = cart.length > 0 && !mFinalizar.isPending && total > 0 && (formaPagamento !== "dinheiro" || recebido >= total);
 
   const pagamentos: { key: FormaPagamento; label: string; icon: typeof QrCode; hint?: string }[] = [
     { key: "pix", label: "PIX", icon: QrCode, hint: "Aprovação imediata" },
@@ -127,27 +206,49 @@ function Page() {
 
   return (
     <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {modalFechamento && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass w-full max-w-md rounded-3xl p-6 shadow-2xl border border-border/60">
+            <h2 className="text-xl font-display font-bold mb-3 flex items-center gap-2"><LogOut className="h-5 w-5 text-amber-500" /> Fechar Caixa</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              O caixa atual será fechado. As vendas do dia serão totalizadas e o comprovante de fechamento será impresso automaticamente. Deseja continuar?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setModalFechamento(false)} className="px-4 py-2.5 text-sm font-medium rounded-xl border border-border/60 hover:bg-secondary/80 transition">Cancelar</button>
+              <button onClick={() => mFechar.mutate()} disabled={mFechar.isPending} className="px-5 py-2.5 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-50 flex items-center gap-2">
+                {mFechar.isPending ? "Calculando..." : "Confirmar Fechamento"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="grid h-12 w-12 place-items-center rounded-xl bg-[image:var(--gradient-neon)] neon-border">
             <ShoppingCart className="h-5 w-5 text-neon-foreground" />
           </div>
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">PDV</h1>
-            <p className="text-sm text-muted-foreground mt-1">Venda rápida com baixa automática de estoque e lançamento financeiro.</p>
+            <p className="text-sm text-muted-foreground mt-1">Frente de caixa com controle de sessão e impressão.</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 rounded-xl bg-secondary/50 border border-border/60 px-3 py-2">
+            <User className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground hidden sm:inline">Operador:</span>
+            <span className="text-sm font-semibold truncate max-w-[120px]">{caixaAtual.operador_nome}</span>
+          </div>
+          <button onClick={() => setModalFechamento(true)} className="text-xs font-medium text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 transition px-4 py-2 rounded-xl border border-amber-500/40 hover:border-amber-500/60 flex items-center gap-1.5">
+            <LogOut className="h-3.5 w-3.5" /> Fechar Caixa
+          </button>
+          
+          <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>
+          
           <div className="hidden sm:flex items-center gap-2 rounded-xl bg-secondary/50 border border-border/60 px-3 py-2">
             <Package className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Itens no carrinho</span>
-            <span className="text-sm font-semibold tabular-nums">{totalItens}</span>
+            <span className="text-sm font-semibold tabular-nums">{totalItens} <span className="text-xs text-muted-foreground font-normal">itens no carrinho</span></span>
           </div>
-          {cart.length > 0 && (
-            <button onClick={limparCarrinho} className="text-xs text-muted-foreground hover:text-destructive transition px-3 py-2 rounded-xl border border-border/60 hover:border-destructive/40">
-              Limpar venda
-            </button>
-          )}
         </div>
       </motion.div>
 
@@ -173,7 +274,7 @@ function Page() {
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {catalogo.map((p, i) => (
               <motion.button key={p.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.02, 0.3) }}
                 onClick={() => addToCart(p)}
@@ -181,15 +282,14 @@ function Page() {
                 className="glass rounded-2xl p-4 text-left hover:border-primary/40 transition group disabled:opacity-50 disabled:cursor-not-allowed">
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wider">{p.categoria ?? "Sem categoria"}</div>
-                    <div className="mt-1 font-medium">{p.nome}</div>
-                    <div className="text-xs mt-0.5 flex items-center gap-1.5">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wider">{p.categoria ?? "Diversos"}</div>
+                    <div className="mt-1 font-medium leading-tight">{p.nome}</div>
+                    <div className="text-xs mt-1 flex items-center gap-1.5">
                       <span className={`inline-flex h-1.5 w-1.5 rounded-full ${Number(p.quantidade) <= 0 ? "bg-destructive" : Number(p.quantidade) < 5 ? "bg-amber-500" : "bg-emerald-500"}`} />
-                      <span className="text-muted-foreground">{Number(p.quantidade)} {p.unidade ?? ""} em estoque</span>
+                      <span className="text-muted-foreground">{Number(p.quantidade)} {p.unidade ?? ""} disp.</span>
                     </div>
-                    {p.codigo && <div className="text-[10px] text-muted-foreground/70 mt-0.5 font-mono">#{p.codigo}</div>}
                   </div>
-                  <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 group-hover:bg-primary/20 transition">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 group-hover:bg-primary/20 transition">
                     <Plus className="h-4 w-4 text-primary" />
                   </div>
                 </div>
@@ -199,7 +299,7 @@ function Page() {
             {catalogo.length === 0 && (
               <div className="col-span-full glass rounded-2xl py-12 text-center text-sm text-muted-foreground">
                 <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                {busca || categoriaFiltro !== "todas" ? "Nenhum produto encontrado com esses filtros." : "Nenhum produto cadastrado. Cadastre no módulo Estoque."}
+                {busca || categoriaFiltro !== "todas" ? "Nenhum produto encontrado com esses filtros." : "Nenhum produto cadastrado."}
               </div>
             )}
           </div>
@@ -209,7 +309,11 @@ function Page() {
           <div className="glass rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold">Carrinho</h2>
-              <span className="text-xs text-muted-foreground tabular-nums">{totalItens} {totalItens === 1 ? "item" : "itens"}</span>
+              {cart.length > 0 && (
+                <button onClick={limparCarrinho} className="text-xs text-destructive opacity-80 hover:opacity-100 hover:underline">
+                  Limpar tudo
+                </button>
+              )}
             </div>
             {cart.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
@@ -217,7 +321,7 @@ function Page() {
                 Adicione produtos para iniciar a venda
               </div>
             ) : (
-              <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1 styled-scrollbar">
                 {cart.map(item => (
                   <div key={item.id} className="flex items-center gap-3 rounded-xl bg-secondary/40 p-3 hover:bg-secondary/60 transition">
                     <div className="flex-1 min-w-0">
@@ -271,8 +375,8 @@ function Page() {
             <h3 className="text-sm font-medium mb-3 inline-flex items-center gap-2">
               <User className="h-3.5 w-3.5 text-muted-foreground" /> Cliente <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
             </h3>
-            <select value={clienteId} onChange={e => setClienteId(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-              <option value="">Consumidor final</option>
+            <select value={clienteId} onChange={e => setClienteId(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary/40">
+              <option value="">Consumidor final (Balcão)</option>
               {(clientes as any[]).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </div>
@@ -282,17 +386,17 @@ function Page() {
             <div className="grid grid-cols-2 gap-2">
               {pagamentos.map(fp => (
                 <button key={fp.key} onClick={() => setFormaPagamento(fp.key)} type="button"
-                  className={`flex flex-col items-center gap-1 rounded-xl border px-3 py-3 text-xs font-medium transition ${formaPagamento === fp.key ? "border-primary bg-primary/10 text-primary shadow-[0_0_16px_-6px_oklch(0.65_0.18_240/0.5)]" : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
+                  className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-medium transition ${formaPagamento === fp.key ? "border-primary bg-primary/10 text-primary shadow-[0_0_16px_-6px_oklch(0.65_0.18_240/0.5)]" : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
                   <fp.icon className="h-4 w-4" />
                   <span>{fp.label}</span>
-                  {fp.hint && <span className="text-[10px] opacity-70 font-normal">{fp.hint}</span>}
+                  {fp.hint && <span className="text-[10px] opacity-70 font-normal text-center leading-tight hidden sm:block">{fp.hint}</span>}
                 </button>
               ))}
             </div>
 
             {formaPagamento === "dinheiro" && cart.length > 0 && (
               <div className="mt-4 space-y-2 pt-3 border-t border-border/40">
-                <label className="text-xs text-muted-foreground">Valor recebido</label>
+                <label className="text-xs text-muted-foreground font-medium">Valor recebido (R$)</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
                   <input
@@ -312,8 +416,8 @@ function Page() {
                     </>
                   ) : (
                     <>
-                      <span className="text-muted-foreground">Troco</span>
-                      <span className="font-semibold tabular-nums text-emerald-500">{brl(troco)}</span>
+                      <span className="text-muted-foreground">Troco ao cliente</span>
+                      <span className="font-semibold tabular-nums text-emerald-500 text-sm">{brl(troco)}</span>
                     </>
                   )}
                 </div>
@@ -322,14 +426,14 @@ function Page() {
 
             {cart.length > 0 && (
               <div className="mt-4 pt-3 border-t border-border/40">
-                <label className="text-xs text-muted-foreground">Observação (opcional)</label>
+                <label className="text-xs text-muted-foreground font-medium">Observação (opcional)</label>
                 <input
                   type="text"
                   value={observacao}
                   onChange={e => setObservacao(e.target.value)}
                   maxLength={500}
-                  placeholder="Ex.: nota fiscal, parcelamento..."
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/30"
+                  placeholder="Ex.: entregar amanhã..."
+                  className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/30"
                 />
               </div>
             )}
@@ -337,7 +441,7 @@ function Page() {
 
           <button onClick={() => mFinalizar.mutate()} disabled={!podeFinalizar} className="w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_24px_-4px_oklch(0.65_0.18_240/0.5)] flex items-center justify-center gap-2">
             <Receipt className="h-4 w-4" />
-            {mFinalizar.isPending ? "Processando…" : cart.length === 0 ? "Adicione produtos" : `Finalizar — ${brl(total)}`}
+            {mFinalizar.isPending ? "Processando…" : cart.length === 0 ? "Adicione produtos" : `Finalizar Venda — ${brl(total)}`}
           </button>
         </motion.div>
       </div>
