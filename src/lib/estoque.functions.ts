@@ -24,6 +24,23 @@ function clean<T extends Record<string, any>>(o: T) {
   return out;
 }
 
+async function getCurrentWorkshopId(supabase: any, userId?: string) {
+  if (!userId) throw new Error("Usuário não autenticado");
+
+  const { data, error } = await supabase
+    .from("workshop_members")
+    .select("workshop_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data?.workshop_id) throw new Error("Nenhuma oficina vinculada ao usuário");
+
+  return data.workshop_id as string;
+}
+
 export const listEstoque = createServerFn({ method: "GET" }).handler(async ({ context }) => {
   const { supabase } = context as any;
   const { data, error } = await supabase
@@ -38,8 +55,13 @@ export const listEstoque = createServerFn({ method: "GET" }).handler(async ({ co
 export const createEstoqueItem = createServerFn({ method: "POST" })
   .inputValidator((d: ItemInputType) => ItemInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context as any;
-    const { data: row, error } = await supabase.from("estoque_itens").insert(clean(data)).select().single();
+    const { supabase, userId } = context as any;
+    const workshopId = await getCurrentWorkshopId(supabase, userId);
+    const { data: row, error } = await supabase
+      .from("estoque_itens")
+      .insert({ ...clean(data), workshop_id: workshopId })
+      .select()
+      .single();
     if (error) throw new Error(error.message);
     return row;
   });
@@ -78,8 +100,9 @@ const MovInput = z.object({
 export const createMovimentacao = createServerFn({ method: "POST" })
   .inputValidator((d: z.infer<typeof MovInput>) => MovInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context as any;
-    const { error } = await supabase.from("estoque_movimentacoes").insert(clean(data));
+    const { supabase, userId } = context as any;
+    const workshopId = await getCurrentWorkshopId(supabase, userId);
+    const { error } = await supabase.from("estoque_movimentacoes").insert({ ...clean(data), workshop_id: workshopId });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -90,8 +113,9 @@ export type BulkImportInputType = z.infer<typeof BulkImportInput>;
 export const bulkImportEstoque = createServerFn({ method: "POST" })
   .inputValidator((d: BulkImportInputType) => BulkImportInput.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context as any;
-    const cleanedData = data.map(clean);
+    const { supabase, userId } = context as any;
+    const workshopId = await getCurrentWorkshopId(supabase, userId);
+    const cleanedData = data.map((item) => ({ ...clean(item), workshop_id: workshopId }));
 
     // Normaliza códigos (trim + uppercase) para evitar duplicatas por variação
     for (const r of cleanedData as any[]) {
@@ -113,20 +137,43 @@ export const bulkImportEstoque = createServerFn({ method: "POST" })
     let updated = 0;
 
     if (dedupedWithCode.length > 0) {
-      // Upsert por (workshop_id, codigo) — atualiza preços/quantidades se já existir
-      const { error, count } = await supabase
+      const codigos = dedupedWithCode.map((r) => r.codigo);
+      const { data: existingRows, error: existingError } = await supabase
         .from("estoque_itens")
-        .upsert(dedupedWithCode, { onConflict: "workshop_id,codigo", ignoreDuplicates: false, count: "exact" });
-      if (error) throw new Error(error.message);
-      updated = count ?? dedupedWithCode.length;
+        .select("id,codigo")
+        .eq("workshop_id", workshopId)
+        .in("codigo", codigos);
+
+      if (existingError) throw new Error(existingError.message);
+
+      const existingByCode = new Map<string, { id: string; codigo: string }>();
+      for (const row of existingRows ?? []) {
+        if (row.codigo) existingByCode.set(String(row.codigo).trim().toUpperCase(), row as { id: string; codigo: string });
+      }
+
+      const toInsert = dedupedWithCode.filter((row) => !existingByCode.has(row.codigo));
+      const toUpdate = dedupedWithCode
+        .filter((row) => existingByCode.has(row.codigo))
+        .map((row) => ({ ...row, id: existingByCode.get(row.codigo)!.id }));
+
+      if (toInsert.length > 0) {
+        const { error, count } = await supabase.from("estoque_itens").insert(toInsert, { count: "exact" });
+        if (error) throw new Error(error.message);
+        inserted += count ?? toInsert.length;
+      }
+
+      for (const row of toUpdate) {
+        const { id, ...payload } = row;
+        const { error } = await supabase.from("estoque_itens").update(payload).eq("id", id).eq("workshop_id", workshopId);
+        if (error) throw new Error(error.message);
+      }
+      updated += toUpdate.length;
     }
 
     if (withoutCode.length > 0) {
-      const { error, count } = await supabase
-        .from("estoque_itens")
-        .insert(withoutCode, { count: "exact" });
+      const { error, count } = await supabase.from("estoque_itens").insert(withoutCode, { count: "exact" });
       if (error) throw new Error(error.message);
-      inserted = count ?? withoutCode.length;
+      inserted += count ?? withoutCode.length;
     }
 
     return {
