@@ -661,8 +661,7 @@ function GeradorEtiquetas({ produtos }: { produtos: Item[] }) {
   };
 
   const removeFila = (id: string) => setFila(prev => prev.filter(x => x.item.id !== id));
-
-  const brl = (n: number) => \`R$ \${n.toFixed(2).replace(".", ",")}\`;
+  const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
