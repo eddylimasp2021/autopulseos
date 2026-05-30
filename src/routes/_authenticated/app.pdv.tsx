@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet, LogOut } from "lucide-react";
-import { useState } from "react";
+import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet, LogOut, Keyboard } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -27,6 +27,8 @@ function Page() {
   const [observacao, setObservacao] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
   const qc = useQueryClient();
+  const buscaRef = useRef<HTMLInputElement>(null);
+  const descontoRef = useRef<HTMLInputElement>(null);
 
   const listEst = useServerFn(listEstoqueParaPDV);
   const finalizar = useServerFn(finalizarVenda);
@@ -199,11 +201,30 @@ function Page() {
   const podeFinalizar = cart.length > 0 && !mFinalizar.isPending && total > 0 && (formaPagamento !== "dinheiro" || recebido >= total);
 
   const pagamentos: { key: FormaPagamento; label: string; icon: typeof QrCode; hint?: string }[] = [
-    { key: "pix", label: "PIX", icon: QrCode, hint: "Aprovação imediata" },
-    { key: "dinheiro", label: "Dinheiro", icon: Banknote, hint: "Calcula troco" },
-    { key: "cartao_credito", label: "Crédito", icon: CreditCard, hint: "Cartão de crédito" },
-    { key: "cartao_debito", label: "Débito", icon: Wallet, hint: "Cartão de débito" },
+    { key: "pix", label: "PIX", icon: QrCode, hint: "Atalho F3" },
+    { key: "dinheiro", label: "Dinheiro", icon: Banknote, hint: "Atalho F4" },
+    { key: "cartao_credito", label: "Crédito", icon: CreditCard, hint: "Atalho F5" },
+    { key: "cartao_debito", label: "Débito", icon: Wallet, hint: "Atalho F6" },
   ];
+
+  useEffect(() => {
+    if (!caixaAtual) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F2") { e.preventDefault(); buscaRef.current?.focus(); }
+      else if (e.key === "F3") { e.preventDefault(); setFormaPagamento("pix"); }
+      else if (e.key === "F4") { e.preventDefault(); setFormaPagamento("dinheiro"); }
+      else if (e.key === "F5") { e.preventDefault(); setFormaPagamento("cartao_credito"); }
+      else if (e.key === "F6") { e.preventDefault(); setFormaPagamento("cartao_debito"); }
+      else if (e.key === "F8") { e.preventDefault(); descontoRef.current?.focus(); }
+      else if (e.key === "F9") { 
+        e.preventDefault(); 
+        if (podeFinalizar && !mFinalizar.isPending) mFinalizar.mutate(); 
+      }
+      else if (e.key === "Escape") { e.preventDefault(); limparCarrinho(); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [caixaAtual, podeFinalizar, mFinalizar.isPending, mFinalizar.mutate]);
 
   return (
     <div className="space-y-6">
@@ -257,7 +278,7 @@ function Page() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="lg:col-span-2 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input autoFocus value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto por nome ou código..." className="w-full rounded-xl border border-border bg-secondary/50 pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+            <input ref={buscaRef} autoFocus value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar produto por nome ou código (F2)" className="w-full rounded-xl border border-border bg-secondary/50 pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
 
           {categorias.length > 0 && (
@@ -355,12 +376,14 @@ function Page() {
                   <div className="relative">
                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
                     <input
+                      ref={descontoRef}
                       type="text"
                       inputMode="decimal"
                       value={descontoStr}
                       onChange={e => setDescontoStr(e.target.value)}
                       placeholder="0,00"
                       className="w-28 rounded-md border border-input bg-background pl-8 pr-2 py-1.5 text-sm text-right tabular-nums outline-none focus:ring-1 focus:ring-primary/30"
+                      title="Atalho F8"
                     />
                   </div>
                 </div>
@@ -442,8 +465,19 @@ function Page() {
 
           <button onClick={() => mFinalizar.mutate()} disabled={!podeFinalizar} className="w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_24px_-4px_oklch(0.65_0.18_240/0.5)] flex items-center justify-center gap-2">
             <Receipt className="h-4 w-4" />
-            {mFinalizar.isPending ? "Processando…" : cart.length === 0 ? "Adicione produtos" : `Finalizar Venda — ${brl(total)}`}
+            {mFinalizar.isPending ? "Processando…" : cart.length === 0 ? "Adicione produtos" : `Finalizar Venda (F9) — ${brl(total)}`}
           </button>
+          
+          <div className="flex flex-wrap justify-center gap-4 mt-4 pt-4 border-t border-border/40 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+            <span className="flex items-center gap-1"><Keyboard className="h-3 w-3" /> F2: Buscar</span>
+            <span>F3: PIX</span>
+            <span>F4: Dinheiro</span>
+            <span>F5: Crédito</span>
+            <span>F6: Débito</span>
+            <span>F8: Desconto</span>
+            <span>F9: Finalizar</span>
+            <span>ESC: Limpar</span>
+          </div>
         </motion.div>
       </div>
     </div>
