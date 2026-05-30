@@ -7,6 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { listEstoqueParaPDV, finalizarVenda } from "@/lib/pdv.functions";
 import { listClientes } from "@/lib/clientes.functions";
+import { imprimirCupomNaoFiscal } from "@/lib/print";
 
 export const Route = createFileRoute("/_authenticated/app/pdv")({ component: Page });
 
@@ -90,6 +91,19 @@ function Page() {
     onSuccess: (r: any) => {
       const trocoMsg = r.troco > 0 ? ` • Troco ${brl(Number(r.troco))}` : "";
       toast.success(`Venda finalizada — ${brl(Number(r.total))}${trocoMsg}`);
+      
+      imprimirCupomNaoFiscal({
+        itens: cart,
+        subtotal: subtotal,
+        desconto: desconto,
+        total: r.total,
+        formaPagamento: formaPagamento,
+        recebido: recebido,
+        troco: r.troco,
+        observacao: observacao,
+        data: new Date().toLocaleString("pt-BR")
+      });
+
       limparCarrinho(); setClienteId("");
       qc.invalidateQueries({ queryKey: ["pdv-estoque"] });
       qc.invalidateQueries({ queryKey: ["financeiro"] });
