@@ -10,7 +10,10 @@ const Item = z.object({
 
 const FinalizarInput = z.object({
   cliente_id: z.string().uuid().nullable().optional(),
-  forma_pagamento: z.enum(["pix", "dinheiro", "cartao"]),
+  forma_pagamento: z.enum(["pix", "dinheiro", "cartao_credito", "cartao_debito"]),
+  desconto: z.coerce.number().min(0).max(99999999).optional().default(0),
+  valor_recebido: z.coerce.number().min(0).max(99999999).optional().nullable(),
+  observacao: z.string().trim().max(500).optional().nullable(),
   itens: z.array(Item).min(1).max(200),
 });
 export type FinalizarInputType = z.infer<typeof FinalizarInput>;
