@@ -26,6 +26,10 @@ function Page() {
   const [recebidoStr, setRecebidoStr] = useState("");
   const [observacao, setObservacao] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
+  const [isPagamentoMultiplo, setIsPagamentoMultiplo] = useState(false);
+  const [pagamentosAdicionados, setPagamentosAdicionados] = useState<{ id: string, forma: FormaPagamento, valor: number }[]>([]);
+  const [formaPagamentoMultiplo, setFormaPagamentoMultiplo] = useState<FormaPagamento>("pix");
+  const [valorMultiploStr, setValorMultiploStr] = useState("");
   const qc = useQueryClient();
   const buscaRef = useRef<HTMLInputElement>(null);
   const descontoRef = useRef<HTMLInputElement>(null);
@@ -57,9 +61,13 @@ function Page() {
   const desconto = Math.min(subtotal, Math.max(0, Number(descontoStr.replace(",", ".")) || 0));
   const total = Math.max(0, subtotal - desconto);
   const totalItens = cart.reduce((s, i) => s + i.qtd, 0);
+  
+  const totalPagoMultiplo = pagamentosAdicionados.reduce((s, p) => s + p.valor, 0);
+  const faltaPagarMultiplo = Math.max(0, total - totalPagoMultiplo);
+
   const recebido = Number(recebidoStr.replace(",", ".")) || 0;
-  const troco = formaPagamento === "dinheiro" ? Math.max(0, recebido - total) : 0;
-  const faltaReceber = formaPagamento === "dinheiro" ? Math.max(0, total - recebido) : 0;
+  const troco = !isPagamentoMultiplo && formaPagamento === "dinheiro" ? Math.max(0, recebido - total) : 0;
+  const faltaReceber = !isPagamentoMultiplo && formaPagamento === "dinheiro" ? Math.max(0, total - recebido) : 0;
 
   const mAbrir = useMutation({
     mutationFn: () => mAbrirCaixa({ data: { saldo_abertura: Number(saldoAbertura.replace(",", ".")) || 0 } }),
@@ -118,7 +126,10 @@ function Page() {
       return { ...x, qtd: next };
     }));
   const removeItem = (id: string) => setCart(prev => prev.filter(x => x.id !== id));
-  const limparCarrinho = () => { setCart([]); setDescontoStr(""); setRecebidoStr(""); setObservacao(""); };
+  const limparCarrinho = () => { 
+    setCart([]); setDescontoStr(""); setRecebidoStr(""); setObservacao(""); 
+    setIsPagamentoMultiplo(false); setPagamentosAdicionados([]); 
+  };
 
   const onBuscaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -144,9 +155,11 @@ function Page() {
       data: {
         cliente_id: clienteId || null,
         caixa_id: caixaAtual?.id!,
-        forma_pagamento: formaPagamento,
+        pagamentos: isPagamentoMultiplo 
+          ? pagamentosAdicionados.map(p => ({ forma: p.forma, valor: p.valor }))
+          : [{ forma: formaPagamento, valor: total }],
         desconto,
-        valor_recebido: formaPagamento === "dinheiro" ? recebido : null,
+        valor_recebido: (!isPagamentoMultiplo && formaPagamento === "dinheiro") ? recebido : null,
         observacao: observacao || null,
         itens: cart.map(c => ({ estoque_item_id: c.id, descricao: c.nome, quantidade: c.qtd, valor_unit: c.preco })),
       },
@@ -160,8 +173,10 @@ function Page() {
         subtotal: subtotal,
         desconto: desconto,
         total: r.total,
-        formaPagamento: formaPagamento,
-        recebido: recebido,
+        pagamentos: isPagamentoMultiplo 
+          ? pagamentosAdicionados.map(p => ({ forma: p.forma, valor: p.valor }))
+          : [{ forma: formaPagamento, valor: total }],
+        recebido: !isPagamentoMultiplo && formaPagamento === "dinheiro" ? recebido : undefined,
         troco: r.troco,
         observacao: observacao,
         data: new Date().toLocaleString("pt-BR"),
@@ -217,7 +232,10 @@ function Page() {
     );
   }
 
-  const podeFinalizar = cart.length > 0 && !mFinalizar.isPending && total > 0 && (formaPagamento !== "dinheiro" || recebido >= total);
+  const podeFinalizar = cart.length > 0 && !mFinalizar.isPending && total > 0 && 
+    (isPagamentoMultiplo 
+      ? faltaPagarMultiplo <= 0 
+      : (formaPagamento !== "dinheiro" || recebido >= total));
 
   const pagamentos: { key: FormaPagamento; label: string; icon: typeof QrCode; hint?: string }[] = [
     { key: "pix", label: "PIX", icon: QrCode, hint: "Atalho F3" },
@@ -433,48 +451,131 @@ function Page() {
           </div>
 
           <div className="glass rounded-2xl p-5">
-            <h3 className="text-sm font-medium mb-3">Forma de pagamento</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {pagamentos.map(fp => (
-                <button key={fp.key} onClick={() => setFormaPagamento(fp.key)} type="button"
-                  className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-medium transition ${formaPagamento === fp.key ? "border-primary bg-primary/10 text-primary shadow-[0_0_16px_-6px_oklch(0.65_0.18_240/0.5)]" : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
-                  <fp.icon className="h-4 w-4" />
-                  <span>{fp.label}</span>
-                  {fp.hint && <span className="text-[10px] opacity-70 font-normal text-center leading-tight hidden sm:block">{fp.hint}</span>}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium">Forma de pagamento</h3>
+              {cart.length > 0 && total > 0 && (
+                <button 
+                  onClick={() => setIsPagamentoMultiplo(!isPagamentoMultiplo)}
+                  className="text-[10px] uppercase font-bold tracking-wider text-primary bg-primary/10 hover:bg-primary/20 px-2 py-1 rounded-md transition"
+                >
+                  {isPagamentoMultiplo ? "Usar Único" : "Dividir Pagamento"}
                 </button>
-              ))}
+              )}
             </div>
 
-            {formaPagamento === "dinheiro" && cart.length > 0 && (
-              <div className="mt-4 space-y-2 pt-3 border-t border-border/40">
-                <label className="text-xs text-muted-foreground font-medium">Valor recebido (R$)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={recebidoStr}
-                    onChange={e => setRecebidoStr(e.target.value)}
-                    placeholder="0,00"
-                    className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm text-right tabular-nums outline-none focus:ring-1 focus:ring-primary/30"
-                  />
+            {!isPagamentoMultiplo ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  {pagamentos.map(fp => (
+                    <button key={fp.key} onClick={() => setFormaPagamento(fp.key)} type="button"
+                      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-medium transition ${formaPagamento === fp.key ? "border-primary bg-primary/10 text-primary shadow-[0_0_16px_-6px_oklch(0.65_0.18_240/0.5)]" : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground"}`}>
+                      <fp.icon className="h-4 w-4" />
+                      <span>{fp.label}</span>
+                      {fp.hint && <span className="text-[10px] opacity-70 font-normal text-center leading-tight hidden sm:block">{fp.hint}</span>}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex justify-between text-xs pt-1">
-                  {faltaReceber > 0 ? (
-                    <>
-                      <span className="text-amber-500">Falta receber</span>
-                      <span className="font-semibold tabular-nums text-amber-500">{brl(faltaReceber)}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-muted-foreground">Troco ao cliente</span>
-                      <span className="font-semibold tabular-nums text-emerald-500 text-sm">{brl(troco)}</span>
-                    </>
-                  )}
+
+                {formaPagamento === "dinheiro" && cart.length > 0 && (
+                  <div className="mt-4 space-y-2 pt-3 border-t border-border/40">
+                    <label className="text-xs text-muted-foreground font-medium">Valor recebido (R$)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={recebidoStr}
+                        onChange={e => setRecebidoStr(e.target.value)}
+                        placeholder="0,00"
+                        className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm text-right tabular-nums outline-none focus:ring-1 focus:ring-primary/30"
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs pt-1">
+                      {faltaReceber > 0 ? (
+                        <>
+                          <span className="text-amber-500">Falta receber</span>
+                          <span className="font-semibold tabular-nums text-amber-500">{brl(faltaReceber)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-muted-foreground">Troco ao cliente</span>
+                          <span className="font-semibold tabular-nums text-emerald-500 text-sm">{brl(troco)}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <select 
+                      value={formaPagamentoMultiplo} 
+                      onChange={e => setFormaPagamentoMultiplo(e.target.value as FormaPagamento)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary/30"
+                    >
+                      <option value="pix">PIX</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="cartao_credito">Cartão de Crédito</option>
+                      <option value="cartao_debito">Cartão de Débito</option>
+                    </select>
+                  </div>
+                  <div className="flex-1 relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={valorMultiploStr}
+                      onChange={e => setValorMultiploStr(e.target.value)}
+                      placeholder={faltaPagarMultiplo > 0 ? faltaPagarMultiplo.toFixed(2) : "0,00"}
+                      className="w-full rounded-md border border-input bg-background pl-8 pr-2 py-2 text-sm text-right tabular-nums outline-none focus:ring-1 focus:ring-primary/30"
+                    />
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const val = Number(valorMultiploStr.replace(",", ".")) || faltaPagarMultiplo;
+                      if (val <= 0) return;
+                      setPagamentosAdicionados([...pagamentosAdicionados, { id: crypto.randomUUID(), forma: formaPagamentoMultiplo, valor: val }]);
+                      setValorMultiploStr("");
+                    }}
+                    disabled={faltaPagarMultiplo <= 0}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
+
+                {pagamentosAdicionados.length > 0 && (
+                  <div className="space-y-2 border-t border-border/40 pt-3">
+                    {pagamentosAdicionados.map(p => (
+                      <div key={p.id} className="flex items-center justify-between text-sm bg-secondary/40 px-3 py-2 rounded-lg">
+                        <span className="capitalize">{p.forma.replace("cartao_", "cartão ")}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-medium tabular-nums">{brl(p.valor)}</span>
+                          <button onClick={() => setPagamentosAdicionados(prev => prev.filter(x => x.id !== p.id))} className="text-destructive hover:text-destructive/80"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center text-xs pt-1">
+                      {faltaPagarMultiplo > 0 ? (
+                        <>
+                          <span className="text-amber-500 font-medium">Falta Pagar</span>
+                          <span className="font-semibold tabular-nums text-amber-500 text-sm">{brl(faltaPagarMultiplo)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-emerald-500 font-medium">Pago</span>
+                          <span className="font-semibold tabular-nums text-emerald-500 text-sm">{brl(totalPagoMultiplo)}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-
+            
             {cart.length > 0 && (
               <div className="mt-4 pt-3 border-t border-border/40">
                 <label className="text-xs text-muted-foreground font-medium">Observação (opcional)</label>

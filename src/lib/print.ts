@@ -3,7 +3,7 @@ export interface CupomData {
   subtotal: number;
   desconto: number;
   total: number;
-  formaPagamento: string;
+  pagamentos: { forma: string; valor: number }[];
   recebido?: number;
   troco?: number;
   observacao?: string;
@@ -100,10 +100,15 @@ export function imprimirCupomNaoFiscal(data: CupomData) {
       
       <table>
         <tr>
-          <td>Forma Pag.:</td>
-          <td class="right">${data.formaPagamento.toUpperCase()}</td>
+          <td colspan="2" class="bold" style="padding-bottom: 5px;">PAGAMENTOS:</td>
         </tr>
-        ${data.formaPagamento === 'dinheiro' && data.recebido ? `
+        ${data.pagamentos.map(p => `
+        <tr>
+          <td>- ${p.forma.toUpperCase()}</td>
+          <td class="right">${brl(p.valor)}</td>
+        </tr>
+        `).join('')}
+        ${data.recebido ? `
         <tr>
           <td>Recebido:</td>
           <td class="right">${brl(data.recebido)}</td>

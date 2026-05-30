@@ -11,8 +11,10 @@ const Item = z.object({
 const FinalizarInput = z.object({
   cliente_id: z.string().uuid().nullable().optional(),
   caixa_id: z.string().uuid(),
-  forma_pagamento: z.enum(["pix", "dinheiro", "cartao_credito", "cartao_debito"]),
-  desconto: z.coerce.number().min(0).max(99999999).optional().default(0),
+  pagamentos: z.array(z.object({
+    forma: z.enum(["pix", "dinheiro", "cartao_credito", "cartao_debito"]),
+    valor: z.coerce.number().min(0)
+  })).min(1),
   valor_recebido: z.coerce.number().min(0).max(99999999).optional().nullable(),
   observacao: z.string().trim().max(500).optional().nullable(),
   itens: z.array(Item).min(1).max(200),
@@ -39,31 +41,30 @@ export const finalizarVenda = createServerFn({ method: "POST" })
     const total = Math.max(0, subtotal - desconto);
     const hoje = new Date().toISOString().slice(0, 10);
 
-    const formaLabel: Record<string, string> = {
-      pix: "PIX",
-      dinheiro: "Dinheiro",
-      cartao_credito: "Cartão de crédito",
-      cartao_debito: "Cartão de débito",
-    };
-    const descBase = `Venda PDV (${data.itens.length} ${data.itens.length === 1 ? "item" : "itens"}) — ${formaLabel[data.forma_pagamento]}`;
+    const descBase = `Venda PDV (${data.itens.length} ${data.itens.length === 1 ? "item" : "itens"})`;
     const descricao = data.observacao ? `${descBase} | ${data.observacao}` : descBase;
 
-    const { data: lanc, error: e1 } = await supabase
-      .from("financeiro_lancamentos")
-      .insert({
+    const lancamentosAInserir = data.pagamentos.filter(p => p.valor > 0).map(p => ({
         tipo: "receita",
         categoria: "PDV",
         descricao,
-        valor: total,
+        valor: p.valor,
         data_vencimento: hoje,
         data_pagamento: hoje,
         status: "pago",
-        forma_pagamento: data.forma_pagamento,
+        forma_pagamento: p.forma,
         cliente_id: data.cliente_id ?? null,
         caixa_id: data.caixa_id,
-      })
-      .select()
-      .single();
+    }));
+
+    if (lancamentosAInserir.length === 0) {
+      throw new Error("Nenhum pagamento válido informado.");
+    }
+
+    const { data: lancs, error: e1 } = await supabase
+      .from("financeiro_lancamentos")
+      .insert(lancamentosAInserir)
+      .select();
     if (e1) throw new Error(e1.message);
 
     // Baixa estoque para itens cadastrados
@@ -73,15 +74,18 @@ export const finalizarVenda = createServerFn({ method: "POST" })
           item_id: it.estoque_item_id,
           tipo: "saida",
           quantidade: it.quantidade,
-          motivo: `PDV ${lanc.id.slice(0, 8)}`,
+          motivo: `PDV ${lancs[0].id.slice(0, 8)}`,
         });
         if (em) throw new Error(em.message);
       }
     }
-    const troco = data.forma_pagamento === "dinheiro" && data.valor_recebido != null
-      ? Math.max(0, Number(data.valor_recebido) - total)
+    
+    const pagDinheiro = data.pagamentos.find(p => p.forma === "dinheiro");
+    const troco = pagDinheiro && data.valor_recebido != null
+      ? Math.max(0, Number(data.valor_recebido) - pagDinheiro.valor)
       : 0;
-    return { ok: true, total, subtotal, desconto, troco, lancamento_id: lanc.id };
+      
+    return { ok: true, total, subtotal, desconto, troco, lancamentos_ids: lancs.map((l:any) => l.id) };
   });
 
 export const verificarCaixaAberto = createServerFn({ method: "GET" }).handler(async ({ context }) => {

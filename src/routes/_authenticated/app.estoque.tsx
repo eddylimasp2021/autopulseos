@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Package, Search, Plus, AlertTriangle, TrendingUp, TrendingDown, Pencil, Trash2, ArrowDownUp } from "lucide-react";
+import { Package, Search, Plus, AlertTriangle, TrendingUp, TrendingDown, Pencil, Trash2, ArrowDownUp, Printer, QrCode } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileSpreadsheet, Check } from "lucide-react";
 import Papa from "papaparse";
+import Papa from "papaparse";
 import { listEstoque, createEstoqueItem, updateEstoqueItem, deleteEstoqueItem, createMovimentacao, bulkImportEstoque } from "@/lib/estoque.functions";
+import { imprimirEtiquetas, EtiquetaLayout, EtiquetaItem } from "@/lib/etiquetas";
 
 export const Route = createFileRoute("/_authenticated/app/estoque")({ component: Page });
 
@@ -130,6 +132,7 @@ function Page() {
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="importacao">Importação (Arquivo)</TabsTrigger>
           <TabsTrigger value="manual">Importação (Copiar/Colar)</TabsTrigger>
+          <TabsTrigger value="etiquetas">Gerar Etiquetas</TabsTrigger>
         </TabsList>
         
         <TabsContent value="visao-geral" className="space-y-6 mt-0">
@@ -235,6 +238,10 @@ function Page() {
 
       <TabsContent value="manual" className="mt-0">
         <Importador onImportDone={() => { invalidate(); setTab("visao-geral"); }} mode="manual" />
+      </TabsContent>
+
+      <TabsContent value="etiquetas" className="mt-0">
+        <GeradorEtiquetas produtos={itens as Item[]} />
       </TabsContent>
       </Tabs>
 
@@ -610,3 +617,142 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
     </div>
   );
 }
+
+function GeradorEtiquetas({ produtos }: { produtos: Item[] }) {
+  const [fila, setFila] = useState<{ item: Item, qty: number }[]>([]);
+  const [layout, setLayout] = useState<EtiquetaLayout>("Termica_80mm");
+  const [busca, setBusca] = useState("");
+
+  const filtered = produtos.filter(p => {
+    if (!p.codigo) return false; // só produtos com código podem ter etiqueta
+    const q = busca.toLowerCase().trim();
+    return !q || p.nome.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q);
+  });
+
+  const handlePrint = () => {
+    if (fila.length === 0) {
+      toast.error("Adicione produtos à fila de impressão.");
+      return;
+    }
+    const itensParaImprimir: EtiquetaItem[] = fila.map(f => ({
+      nome: f.item.nome,
+      preco: Number(f.item.preco_venda),
+      codigo: f.item.codigo!,
+      quantidade: f.qty
+    }));
+    imprimirEtiquetas(itensParaImprimir, layout);
+  };
+
+  const addFila = (item: Item) => {
+    setFila(prev => {
+      const ex = prev.find(x => x.item.id === item.id);
+      if (ex) return prev.map(x => x.item.id === item.id ? { ...x, qty: x.qty + 1 } : x);
+      return [...prev, { item, qty: 1 }];
+    });
+  };
+
+  const updateQty = (id: string, delta: number) => {
+    setFila(prev => prev.map(x => {
+      if (x.item.id !== id) return x;
+      const n = x.qty + delta;
+      if (n <= 0) return { ...x, qty: 1 };
+      return { ...x, qty: n };
+    }));
+  };
+
+  const removeFila = (id: string) => setFila(prev => prev.filter(x => x.item.id !== id));
+
+  const brl = (n: number) => \`R$ \${n.toFixed(2).replace(".", ",")}\`;
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div className="glass rounded-2xl p-6 space-y-4">
+        <div>
+          <h3 className="font-semibold flex items-center gap-2"><QrCode className="h-5 w-5 text-primary" /> Selecionar Produtos</h3>
+          <p className="text-sm text-muted-foreground mt-1">Busque produtos que possuem código de barras cadastrado.</p>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input 
+            value={busca} 
+            onChange={e => setBusca(e.target.value)} 
+            placeholder="Buscar por nome ou código..." 
+            className="w-full rounded-xl border border-border bg-secondary/50 pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30" 
+          />
+        </div>
+        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 styled-scrollbar">
+          {filtered.slice(0, 50).map(p => (
+            <div key={p.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/40">
+              <div>
+                <div className="text-sm font-medium">{p.nome}</div>
+                <div className="text-xs text-muted-foreground font-mono">{p.codigo}</div>
+              </div>
+              <button 
+                onClick={() => addFila(p)}
+                className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="text-center py-6 text-sm text-muted-foreground">Nenhum produto com código encontrado.</div>
+          )}
+        </div>
+      </div>
+
+      <div className="glass rounded-2xl p-6 space-y-6">
+        <div>
+          <h3 className="font-semibold flex items-center gap-2"><Printer className="h-5 w-5 text-primary" /> Fila de Impressão</h3>
+          <p className="text-sm text-muted-foreground mt-1">Escolha o layout e a quantidade de etiquetas.</p>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">Layout da Etiqueta</label>
+          <select 
+            value={layout} 
+            onChange={e => setLayout(e.target.value as EtiquetaLayout)}
+            className="w-full rounded-xl border border-border bg-secondary/50 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="Termica_80mm">Térmica 80mm (Cupom Fiscal Padrão)</option>
+            <option value="A4_Pimaco">Folha A4 (Pimaco / Inkjet / Laser)</option>
+            <option value="Argox_40x20">Bobina Argox 40x20mm</option>
+          </select>
+        </div>
+
+        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 styled-scrollbar">
+          {fila.map(f => (
+            <div key={f.item.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/40">
+              <div className="flex-1 min-w-0 pr-4">
+                <div className="text-sm font-medium truncate">{f.item.nome}</div>
+                <div className="text-xs text-muted-foreground">{brl(Number(f.item.preco_venda))}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <button onClick={() => updateQty(f.item.id, -1)} className="grid h-6 w-6 place-items-center rounded bg-secondary hover:bg-primary/20">-</button>
+                  <span className="w-6 text-center text-sm">{f.qty}</span>
+                  <button onClick={() => updateQty(f.item.id, 1)} className="grid h-6 w-6 place-items-center rounded bg-secondary hover:bg-primary/20">+</button>
+                </div>
+                <button onClick={() => removeFila(f.item.id)} className="text-destructive opacity-70 hover:opacity-100 transition"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            </div>
+          ))}
+          {fila.length === 0 && (
+            <div className="text-center py-6 text-sm text-muted-foreground">Fila vazia.</div>
+          )}
+        </div>
+
+        <div className="pt-4 border-t border-border/40">
+          <button 
+            onClick={handlePrint}
+            disabled={fila.length === 0}
+            className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Printer className="h-4 w-4" /> 
+            Imprimir {fila.reduce((s, f) => s + f.qty, 0)} Etiquetas
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
