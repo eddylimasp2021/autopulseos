@@ -33,20 +33,31 @@ export const finalizarVenda = createServerFn({ method: "POST" })
   .inputValidator((d: FinalizarInputType) => FinalizarInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context as any;
-    const total = data.itens.reduce((s, i) => s + i.quantidade * i.valor_unit, 0);
+    const subtotal = data.itens.reduce((s, i) => s + i.quantidade * i.valor_unit, 0);
+    const desconto = Number(data.desconto ?? 0);
+    const total = Math.max(0, subtotal - desconto);
     const hoje = new Date().toISOString().slice(0, 10);
+
+    const formaLabel: Record<string, string> = {
+      pix: "PIX",
+      dinheiro: "Dinheiro",
+      cartao_credito: "Cartão de crédito",
+      cartao_debito: "Cartão de débito",
+    };
+    const descBase = `Venda PDV (${data.itens.length} ${data.itens.length === 1 ? "item" : "itens"}) — ${formaLabel[data.forma_pagamento]}`;
+    const descricao = data.observacao ? `${descBase} | ${data.observacao}` : descBase;
 
     const { data: lanc, error: e1 } = await supabase
       .from("financeiro_lancamentos")
       .insert({
         tipo: "receita",
         categoria: "PDV",
-        descricao: `Venda PDV (${data.itens.length} ${data.itens.length === 1 ? "item" : "itens"})`,
+        descricao,
         valor: total,
         data_vencimento: hoje,
         data_pagamento: hoje,
         status: "pago",
-        forma_pagamento: data.forma_pagamento,
+        forma_pagamento: data.forma_pagamento === "cartao_credito" || data.forma_pagamento === "cartao_debito" ? "cartao" : data.forma_pagamento,
         cliente_id: data.cliente_id ?? null,
       })
       .select()
@@ -65,5 +76,8 @@ export const finalizarVenda = createServerFn({ method: "POST" })
         if (em) throw new Error(em.message);
       }
     }
-    return { ok: true, total, lancamento_id: lanc.id };
+    const troco = data.forma_pagamento === "dinheiro" && data.valor_recebido != null
+      ? Math.max(0, Number(data.valor_recebido) - total)
+      : 0;
+    return { ok: true, total, subtotal, desconto, troco, lancamento_id: lanc.id };
   });
