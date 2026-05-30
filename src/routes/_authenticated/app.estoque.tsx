@@ -356,8 +356,13 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
   const bImport = useServerFn(bulkImportEstoque);
   const mBulk = useMutation({
     mutationFn: (d: any[]) => bImport({ data: d }),
-    onSuccess: () => { 
-      toast.success("Importação concluída com sucesso!"); 
+    onSuccess: (result: any) => {
+      const totalSalvo = Number(result?.inseridos || 0) + Number(result?.atualizados || 0);
+      if (totalSalvo === 0) {
+        toast.error("Nenhum produto foi salvo. Revise o mapeamento e os dados importados.");
+        return;
+      }
+      toast.success(`Importação concluída: ${result?.inseridos || 0} novos e ${result?.atualizados || 0} atualizados.`);
       onImportDone();
       setFile(null);
       setRawText("");
@@ -479,6 +484,11 @@ function Importador({ onImportDone, mode }: { onImportDone: () => void, mode: "f
       });
       return item;
     }).filter(item => item.nome);
+
+    if (payload.length === 0) {
+      toast.error("Nenhuma linha válida foi encontrada para salvar no estoque.");
+      return;
+    }
 
     mBulk.mutate(payload);
   };
