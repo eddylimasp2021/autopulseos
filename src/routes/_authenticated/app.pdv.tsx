@@ -191,7 +191,7 @@ function Page() {
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="space-y-4 lg:sticky lg:top-6 self-start">
+        <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="space-y-4 lg:sticky lg:top-6 self-start max-h-[calc(100vh-2rem)] overflow-y-auto styled-scrollbar pr-2 pb-6">
           <div className="glass rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display text-lg font-semibold">Carrinho</h2>
