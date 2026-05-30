@@ -79,7 +79,8 @@ function Page() {
         saldoInicial: Number(resumo.saldo_abertura),
         dinheiro: resumo.resumo.dinheiro,
         pix: resumo.resumo.pix,
-        cartao: resumo.resumo.cartao,
+        credito: resumo.resumo.credito,
+        debito: resumo.resumo.debito,
         totalVendas: resumo.resumo.total_vendas,
         saldoFinal: Number(resumo.saldo_abertura) + resumo.resumo.dinheiro
       });

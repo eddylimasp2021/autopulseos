@@ -58,7 +58,7 @@ export const finalizarVenda = createServerFn({ method: "POST" })
         data_vencimento: hoje,
         data_pagamento: hoje,
         status: "pago",
-        forma_pagamento: data.forma_pagamento === "cartao_credito" || data.forma_pagamento === "cartao_debito" ? "cartao" : data.forma_pagamento,
+        forma_pagamento: data.forma_pagamento,
         cliente_id: data.cliente_id ?? null,
         caixa_id: data.caixa_id,
       })
@@ -135,13 +135,14 @@ export const fecharCaixa = createServerFn({ method: "POST" })
       .eq("caixa_id", data.caixa_id);
     if (errLanc) throw new Error(errLanc.message);
 
-    let totalDinheiro = 0, totalPix = 0, totalCartao = 0;
+    let totalDinheiro = 0, totalPix = 0, totalCredito = 0, totalDebito = 0;
     for (const l of (lancamentos || [])) {
       if (l.forma_pagamento === "dinheiro") totalDinheiro += Number(l.valor);
       else if (l.forma_pagamento === "pix") totalPix += Number(l.valor);
-      else totalCartao += Number(l.valor);
+      else if (l.forma_pagamento === "cartao_debito") totalDebito += Number(l.valor);
+      else totalCredito += Number(l.valor); // "cartao_credito" ou antigo "cartao"
     }
-    const totalGeral = totalDinheiro + totalPix + totalCartao;
+    const totalGeral = totalDinheiro + totalPix + totalCredito + totalDebito;
 
     const { data: caixa, error } = await supabase
       .from("pdv_caixas")
@@ -159,6 +160,6 @@ export const fecharCaixa = createServerFn({ method: "POST" })
     
     return { 
       ...caixa,
-      resumo: { dinheiro: totalDinheiro, pix: totalPix, cartao: totalCartao, total_vendas: totalGeral }
+      resumo: { dinheiro: totalDinheiro, pix: totalPix, credito: totalCredito, debito: totalDebito, total_vendas: totalGeral }
     };
   });

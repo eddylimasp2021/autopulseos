@@ -175,7 +175,7 @@ export function imprimirAberturaCaixa(operador: string, saldoInicial: number) {
   openPrintWindow(html);
 }
 
-export function imprimirFechamentoCaixa(dados: { operador: string; dataAbertura: string; saldoInicial: number; dinheiro: number; pix: number; cartao: number; totalVendas: number; saldoFinal: number; }) {
+export function imprimirFechamentoCaixa(dados: { operador: string; dataAbertura: string; saldoInicial: number; dinheiro: number; pix: number; credito: number; debito: number; totalVendas: number; saldoFinal: number; }) {
   const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
   const html = `
     <!DOCTYPE html>
@@ -206,7 +206,8 @@ export function imprimirFechamentoCaixa(dados: { operador: string; dataAbertura:
         <tr><td>Fundo Inicial:</td><td class="right">${brl(dados.saldoInicial)}</td></tr>
         <tr><td>(+) Vendas Dinheiro:</td><td class="right">${brl(dados.dinheiro)}</td></tr>
         <tr><td>(+) Vendas PIX:</td><td class="right">${brl(dados.pix)}</td></tr>
-        <tr><td>(+) Vendas Cartão:</td><td class="right">${brl(dados.cartao)}</td></tr>
+        <tr><td>(+) Cartão Crédito:</td><td class="right">${brl(dados.credito)}</td></tr>
+        <tr><td>(+) Cartão Débito:</td><td class="right">${brl(dados.debito)}</td></tr>
       </table>
       
       <div class="dashed-line"></div>
