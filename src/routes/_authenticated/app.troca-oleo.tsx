@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { listTrocas, createTroca, updateTrocaStatus, deleteTroca } from "@/lib/troca-oleo.functions";
 import { listClientes } from "@/lib/clientes.functions";
 import { listVeiculos } from "@/lib/veiculos.functions";
+import { listEstoque } from "@/lib/estoque.functions";
 
 export const Route = createFileRoute("/_authenticated/app/troca-oleo")({ component: Page });
 
@@ -63,10 +64,12 @@ function Page() {
   const remove = useServerFn(deleteTroca);
   const listCli = useServerFn(listClientes);
   const listVei = useServerFn(listVeiculos);
+  const listEst = useServerFn(listEstoque);
 
   const { data: trocas = [], isLoading } = useQuery({ queryKey: ["trocas"], queryFn: () => list() });
   const { data: clientes = [] } = useQuery({ queryKey: ["clientes"], queryFn: () => listCli() });
   const { data: veiculos = [] } = useQuery({ queryKey: ["veiculos"], queryFn: () => listVei() });
+  const { data: estoque = [] } = useQuery({ queryKey: ["estoque"], queryFn: () => listEst() });
   const invalidate = () => qc.invalidateQueries({ queryKey: ["trocas"] });
 
   const mCreate = useMutation({
@@ -166,6 +169,7 @@ function Page() {
 
       <TrocaDialog open={open} onOpenChange={setOpen}
         clientes={clientes as any[]} veiculos={veiculos as any[]}
+        estoque={estoque as any[]}
         loading={mCreate.isPending}
         onSubmit={(d) => mCreate.mutate({
           cliente_id: d.cliente_id, veiculo_id: d.veiculo_id, data: d.data,
@@ -180,11 +184,12 @@ function Page() {
   );
 }
 
-function TrocaDialog({ open, onOpenChange, onSubmit, loading, clientes, veiculos }: {
+function TrocaDialog({ open, onOpenChange, onSubmit, loading, clientes, veiculos, estoque }: {
   open: boolean; onOpenChange: (v: boolean) => void;
   onSubmit: (d: FormData) => void; loading: boolean;
   clientes: { id: string; nome: string }[];
   veiculos: { id: string; placa: string; cliente_id: string; marca: string | null; modelo: string | null }[];
+  estoque: any[];
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<FormData>({
@@ -193,6 +198,50 @@ function TrocaDialog({ open, onOpenChange, onSubmit, loading, clientes, veiculos
   });
   const cliId = watch("cliente_id");
   const veicsFiltrados = useMemo(() => veiculos.filter(v => !cliId || v.cliente_id === cliId), [veiculos, cliId]);
+
+  const estoqueItens = useMemo(() => {
+    return (estoque || []).map((item: any) => ({
+      id: item.id,
+      nome: item.nome,
+      categoria: (item.categoria || "").toLowerCase(),
+      nomeLower: item.nome.toLowerCase()
+    }));
+  }, [estoque]);
+
+  const viscosidades = ["5W30", "5W40", "10W40", "15W40", "0W20", "5W20", "10W30", "20W50"];
+
+  const oleos = useMemo(() => {
+    const list = estoqueItens.filter(
+      (item: any) => item.categoria.includes("oleo") || 
+                    item.categoria.includes("óleo") || 
+                    item.nomeLower.includes("oleo") || 
+                    item.nomeLower.includes("óleo")
+    );
+    return Array.from(new Set(list.map((item: any) => item.nome)));
+  }, [estoqueItens]);
+
+  const filtrosOleo = useMemo(() => {
+    const list = estoqueItens.filter(
+      (item: any) => item.nomeLower.includes("filtro") && 
+                    (item.nomeLower.includes("oleo") || item.nomeLower.includes("óleo"))
+    );
+    return Array.from(new Set(list.map((item: any) => item.nome)));
+  }, [estoqueItens]);
+
+  const filtrosAr = useMemo(() => {
+    const list = estoqueItens.filter(
+      (item: any) => item.nomeLower.includes("filtro") && item.nomeLower.includes("ar")
+    );
+    return Array.from(new Set(list.map((item: any) => item.nome)));
+  }, [estoqueItens]);
+
+  const filtrosCombustivel = useMemo(() => {
+    const list = estoqueItens.filter(
+      (item: any) => item.nomeLower.includes("filtro") && 
+                    (item.nomeLower.includes("combust") || item.nomeLower.includes("diesel") || item.nomeLower.includes("gasol"))
+    );
+    return Array.from(new Set(list.map((item: any) => item.nome)));
+  }, [estoqueItens]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
@@ -223,13 +272,13 @@ function TrocaDialog({ open, onOpenChange, onSubmit, loading, clientes, veiculos
             <div><Label>KM próxima</Label><Input type="number" {...register("km_proxima")} placeholder="auto +5000" /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Óleo (tipo)</Label><Input {...register("oleo_tipo")} placeholder="5W30" /></div>
-            <div><Label>Óleo (marca)</Label><Input {...register("oleo_marca")} placeholder="Castrol" /></div>
+            <div><Label>Óleo (tipo)</Label><Input {...register("oleo_tipo")} list="viscosidades_list" placeholder="5W30" /></div>
+            <div><Label>Óleo (marca)</Label><Input {...register("oleo_marca")} list="oleos_list" placeholder="Castrol" /></div>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <div><Label>Filtro de óleo</Label><Input {...register("filtro_oleo")} /></div>
-            <div><Label>Filtro de ar</Label><Input {...register("filtro_ar")} /></div>
-            <div><Label>Filtro combust.</Label><Input {...register("filtro_combustivel")} /></div>
+            <div><Label>Filtro de óleo</Label><Input {...register("filtro_oleo")} list="filtros_oleo_list" /></div>
+            <div><Label>Filtro de ar</Label><Input {...register("filtro_ar")} list="filtros_ar_list" /></div>
+            <div><Label>Filtro combust.</Label><Input {...register("filtro_combustivel")} list="filtros_combustivel_list" /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -252,6 +301,22 @@ function TrocaDialog({ open, onOpenChange, onSubmit, loading, clientes, veiculos
             <Button type="submit" disabled={loading}>{loading ? "Salvando…" : "Salvar"}</Button>
           </DialogFooter>
         </form>
+
+        <datalist id="viscosidades_list">
+          {viscosidades.map(v => <option key={v} value={v} />)}
+        </datalist>
+        <datalist id="oleos_list">
+          {oleos.map(o => <option key={o} value={o} />)}
+        </datalist>
+        <datalist id="filtros_oleo_list">
+          {filtrosOleo.map(f => <option key={f} value={f} />)}
+        </datalist>
+        <datalist id="filtros_ar_list">
+          {filtrosAr.map(f => <option key={f} value={f} />)}
+        </datalist>
+        <datalist id="filtros_combustivel_list">
+          {filtrosCombustivel.map(f => <option key={f} value={f} />)}
+        </datalist>
       </DialogContent>
     </Dialog>
   );
