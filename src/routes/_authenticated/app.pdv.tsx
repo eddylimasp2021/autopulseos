@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet, LogOut, Keyboard } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { listEstoqueParaPDV, finalizarVenda, verificarCaixaAberto, abrirCaixa, fecharCaixa } from "@/lib/pdv.functions";
 import { listClientes } from "@/lib/clientes.functions";
+import { listOrdens, getOrdem, updateOrdemStatus } from "@/lib/ordens.functions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { imprimirCupomNaoFiscal, imprimirAberturaCaixa, imprimirFechamentoCaixa } from "@/lib/print";
 
 export const Route = createFileRoute("/_authenticated/app/pdv")({ component: Page });
@@ -34,10 +37,21 @@ function Page() {
   const buscaRef = useRef<HTMLInputElement>(null);
   const descontoRef = useRef<HTMLInputElement>(null);
 
+  // Estados locais para OS
+  const [modalOSOpen, setModalOSOpen] = useState(false);
+  const [osBusca, setOsBusca] = useState("");
+  const [importedOsId, setImportedOsId] = useState<string | null>(null);
+  const [importedOsNumero, setImportedOsNumero] = useState<number | null>(null);
+
   const listEst = useServerFn(listEstoqueParaPDV);
   const finalizar = useServerFn(finalizarVenda);
   const listCli = useServerFn(listClientes);
   
+  // Funções de OS
+  const listOsFn = useServerFn(listOrdens);
+  const getOsFn = useServerFn(getOrdem);
+  const updateOsStatusFn = useServerFn(updateOrdemStatus);
+
   // Funções de Caixa
   const vCaixa = useServerFn(verificarCaixaAberto);
   const mAbrirCaixa = useServerFn(abrirCaixa);
@@ -45,6 +59,7 @@ function Page() {
 
   const { data: produtos = [] } = useQuery({ queryKey: ["pdv-estoque"], queryFn: () => listEst() });
   const { data: clientes = [] } = useQuery({ queryKey: ["clientes"], queryFn: () => listCli() });
+  const { data: ordens = [] } = useQuery({ queryKey: ["pdv-ordens"], queryFn: () => listOsFn() });
   const { data: caixaAtual, isLoading: loadingCaixa } = useQuery({ queryKey: ["pdv-caixa"], queryFn: () => vCaixa() });
 
   const [saldoAbertura, setSaldoAbertura] = useState("");
@@ -129,7 +144,51 @@ function Page() {
   const limparCarrinho = () => { 
     setCart([]); setDescontoStr(""); setRecebidoStr(""); setObservacao(""); 
     setIsPagamentoMultiplo(false); setPagamentosAdicionados([]); 
+    setImportedOsId(null); setImportedOsNumero(null);
   };
+
+  const handleImportOS = async (os: any) => {
+    try {
+      const osCompleta = await getOsFn({ data: { id: os.id } });
+      if (!osCompleta) {
+        toast.error("Erro ao buscar itens da OS.");
+        return;
+      }
+      
+      const cartItems: CartItem[] = osCompleta.itens.map((it: any) => {
+        return {
+          id: it.estoque_item_id || it.id || crypto.randomUUID(),
+          nome: it.descricao,
+          preco: Number(it.valor_unit),
+          qtd: Number(it.quantidade),
+          estoque: it.estoque_item_id 
+            ? (produtos.find((p: any) => p.id === it.estoque_item_id)?.quantidade ?? Number(it.quantidade))
+            : 99999
+        };
+      });
+
+      setCart(cartItems);
+      setClienteId(osCompleta.cliente_id || "");
+      setDescontoStr(osCompleta.desconto ? String(osCompleta.desconto) : "");
+      setObservacao(`Cobrança da OS #${osCompleta.numero}`);
+      setImportedOsId(osCompleta.id);
+      setImportedOsNumero(osCompleta.numero);
+      
+      setModalOSOpen(false);
+      toast.success(`OS #${osCompleta.numero} importada com sucesso!`);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao carregar OS.");
+    }
+  };
+
+  const mUpdateOsStatus = useMutation({
+    mutationFn: (v: { id: string; status: any }) => updateOsStatusFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pdv-ordens"] });
+      qc.invalidateQueries({ queryKey: ["ordens"] });
+    },
+    onError: (e: Error) => console.error("Erro ao atualizar status da OS:", e.message)
+  });
 
   const onBuscaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -161,7 +220,15 @@ function Page() {
         desconto,
         valor_recebido: (!isPagamentoMultiplo && formaPagamento === "dinheiro") ? recebido : null,
         observacao: observacao || null,
-        itens: cart.map(c => ({ estoque_item_id: c.id, descricao: c.nome, quantidade: c.qtd, valor_unit: c.preco })),
+        itens: cart.map(c => {
+          const isRealStockItem = (produtos as Produto[]).some(p => p.id === c.id);
+          return {
+            estoque_item_id: isRealStockItem ? c.id : null,
+            descricao: c.nome,
+            quantidade: c.qtd,
+            valor_unit: c.preco
+          };
+        }),
       },
     }),
     onSuccess: (r: any) => {
@@ -182,6 +249,10 @@ function Page() {
         data: new Date().toLocaleString("pt-BR"),
         operador: caixaAtual?.operador_nome
       });
+
+      if (importedOsId) {
+        mUpdateOsStatus.mutate({ id: importedOsId, status: "entregue" });
+      }
 
       limparCarrinho(); setClienteId("");
       qc.invalidateQueries({ queryKey: ["pdv-estoque"] });
@@ -282,6 +353,13 @@ function Page() {
         </div>
       )}
 
+      <ImportarOSDialog 
+        open={modalOSOpen} 
+        onOpenChange={setModalOSOpen} 
+        ordens={ordens as any[]} 
+        onImport={handleImportOS} 
+      />
+
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="grid h-12 w-12 place-items-center rounded-xl bg-[image:var(--gradient-neon)] neon-border">
@@ -300,6 +378,13 @@ function Page() {
           </div>
           <button onClick={() => setModalFechamento(true)} className="text-xs font-medium text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 transition px-4 py-2 rounded-xl border border-amber-500/40 hover:border-amber-500/60 flex items-center gap-1.5">
             <LogOut className="h-3.5 w-3.5" /> Fechar Caixa
+          </button>
+          
+          <button 
+            onClick={() => setModalOSOpen(true)} 
+            className="text-xs font-medium text-primary hover:bg-primary/10 transition px-4 py-2 rounded-xl border border-primary/40 hover:border-primary/60 flex items-center gap-1.5"
+          >
+            <Receipt className="h-3.5 w-3.5" /> Importar OS
           </button>
           
           <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>
@@ -375,7 +460,14 @@ function Page() {
         <motion.div initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="space-y-4 lg:sticky lg:top-6 self-start max-h-[calc(100vh-2rem)] overflow-y-auto styled-scrollbar pr-2 pb-6">
           <div className="glass rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-lg font-semibold">Carrinho</h2>
+              <div>
+                <h2 className="font-display text-lg font-semibold">Carrinho</h2>
+                {importedOsNumero && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full mt-1">
+                    OS #{importedOsNumero} vinculada
+                  </span>
+                )}
+              </div>
               {cart.length > 0 && (
                 <button onClick={limparCarrinho} className="text-xs text-destructive opacity-80 hover:opacity-100 hover:underline">
                   Limpar tudo
@@ -609,5 +701,92 @@ function Page() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+function ImportarOSDialog({ open, onOpenChange, ordens, onImport }: {
+  open: boolean; onOpenChange: (v: boolean) => void;
+  ordens: any[]; onImport: (os: any) => void;
+}) {
+  const [busca, setBusca] = useState("");
+
+  const filtradas = useMemo(() => {
+    return ordens.filter(o => {
+      if (o.status === "cancelada" || o.status === "entregue") return false;
+      const q = busca.toLowerCase().trim();
+      if (!q) return true;
+      return String(o.numero).includes(q) ||
+        (o.clientes?.nome ?? "").toLowerCase().includes(q) ||
+        (o.veiculos?.placa ?? "").toLowerCase().includes(q) ||
+        (o.veiculos?.modelo ?? "").toLowerCase().includes(q);
+    });
+  }, [ordens, busca]);
+
+  const statusLabel: Record<string, string> = {
+    aberta: "Aberta", em_andamento: "Em andamento",
+    aguardando_peca: "Aguardando peça", concluida: "Concluída"
+  };
+
+  const statusBg: Record<string, string> = {
+    aberta: "bg-primary/10 text-primary border-primary/20",
+    em_andamento: "bg-primary/10 text-primary border-primary/20",
+    aguardando_peca: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    concluida: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogHeader><DialogTitle>Importar Ordem de Serviço</DialogTitle></DialogHeader>
+
+        <div className="relative mb-3 mt-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por número, cliente ou placa..." className="w-full rounded-xl border border-border bg-secondary/50 pl-10 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+
+        <div className="flex-1 overflow-y-auto min-h-[300px] border border-border/50 rounded-xl">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-secondary/50 border-b border-border/50 sticky top-0">
+              <tr className="text-xs uppercase text-muted-foreground">
+                <th className="p-3 font-medium">OS</th>
+                <th className="p-3 font-medium">Cliente / Veículo</th>
+                <th className="p-3 font-medium">Valor Total</th>
+                <th className="p-3 font-medium">Status</th>
+                <th className="p-3 font-medium text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40">
+              {filtradas.map(o => (
+                <tr key={o.id} className="hover:bg-secondary/30 transition">
+                  <td className="p-3 font-mono text-xs font-semibold text-primary">#{o.numero}</td>
+                  <td className="p-3">
+                    <div className="font-medium text-xs sm:text-sm">{o.clientes?.nome ?? "—"}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {[o.veiculos?.marca, o.veiculos?.modelo].filter(Boolean).join(" ")} {o.veiculos?.placa ? `· ${o.veiculos.placa}` : ""}
+                    </div>
+                  </td>
+                  <td className="p-3 font-medium tabular-nums">
+                    {Number(o.valor_total).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </td>
+                  <td className="p-3">
+                    <span className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full border ${statusBg[o.status] || "bg-muted text-muted-foreground"}`}>
+                      {statusLabel[o.status] || o.status}
+                    </span>
+                  </td>
+                  <td className="p-3 text-right">
+                    <Button size="sm" className="h-8" onClick={() => onImport(o)}>Importar</Button>
+                  </td>
+                </tr>
+              ))}
+              {filtradas.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-muted-foreground text-sm">Nenhuma ordem de serviço ativa encontrada.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
