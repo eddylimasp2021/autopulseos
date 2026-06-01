@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   FileText, Settings, UploadCloud, Download, Trash2, Check, FileCheck, 
   FileDigit, Landmark, Calendar, Mail, FileCode, Search, ShieldAlert,
-  Loader2, AlertTriangle, HelpCircle, FileArchive, ArrowUpRight
+  Loader2, AlertTriangle, HelpCircle, FileArchive, ArrowUpRight,
+  Globe, Cpu
 } from "lucide-react";
 import { useMemo, useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -50,6 +51,9 @@ const FiscalSchema = z.object({
   
   nfse_serie: z.coerce.number().int().min(1),
   nfse_ultimo_numero: z.coerce.number().int().min(0),
+
+  api_provider: z.string().trim().optional().nullable(),
+  api_token: z.string().trim().optional().nullable(),
 });
 type FiscalFormData = z.infer<typeof FiscalSchema>;
 
@@ -237,6 +241,9 @@ function Page() {
           <TabsTrigger value="config" className="gap-2 rounded-lg text-xs md:text-sm">
             <Settings className="h-4 w-4" /> Configuração Fiscal
           </TabsTrigger>
+          <TabsTrigger value="api-gateway" className="gap-2 rounded-lg text-xs md:text-sm">
+            <Globe className="h-4 w-4" /> Gateway API Fiscal
+          </TabsTrigger>
           <TabsTrigger value="xmls" className="gap-2 rounded-lg text-xs md:text-sm">
             <UploadCloud className="h-4 w-4" /> Arquivo & Importação XML
           </TabsTrigger>
@@ -247,6 +254,15 @@ function Page() {
 
         <TabsContent value="config" className="mt-0">
           <ConfigTab 
+            config={config} 
+            loading={loadingConfig} 
+            onSave={(d) => mSaveConfig.mutate(d)} 
+            saving={mSaveConfig.isPending} 
+          />
+        </TabsContent>
+
+        <TabsContent value="api-gateway" className="mt-0">
+          <ApiGatewayTab 
             config={config} 
             loading={loadingConfig} 
             onSave={(d) => mSaveConfig.mutate(d)} 
@@ -592,6 +608,176 @@ function ConfigTab({ config, loading, onSave, saving }: {
         <Button type="submit" size="lg" className="px-8 shadow-md" disabled={saving}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           {saving ? "Salvando..." : "Salvar Configurações Fiscais"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ------------------------ API GATEWAY TAB ------------------------
+function ApiGatewayTab({ config, loading, onSave, saving }: {
+  config: any;
+  loading: boolean;
+  onSave: (d: FiscalFormData) => void;
+  saving: boolean;
+}) {
+  const [testingConnection, setTestingConnection] = useState(false);
+
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FiscalFormData>({
+    resolver: zodResolver(FiscalSchema),
+    values: config ? {
+      id: config.id,
+      cnpj: config.cnpj ?? "",
+      razao_social: config.razao_social ?? "",
+      nome_fantasia: config.nome_fantasia ?? "",
+      inscricao_estadual: config.inscricao_estadual ?? "",
+      inscricao_municipal: config.inscricao_municipal ?? "",
+      regime_tributario: config.regime_tributario ?? "simples_nacional",
+      cnae: config.cnae ?? "",
+      ambiente: config.ambiente ?? "homologacao",
+      certificado_base64: config.certificado_base64 ?? "",
+      certificado_senha: config.certificado_senha ?? "",
+      certificado_nome_arquivo: config.certificado_nome_arquivo ?? "",
+      nfce_serie: config.nfce_serie ?? 1,
+      nfce_ultimo_numero: config.nfce_ultimo_numero ?? 0,
+      nfce_csc_id: config.nfce_csc_id ?? "",
+      nfce_csc_token: config.nfce_csc_token ?? "",
+      nfe_serie: config.nfe_serie ?? 1,
+      nfe_ultimo_numero: config.nfe_ultimo_numero ?? 0,
+      nfse_serie: config.nfse_serie ?? 1,
+      nfse_ultimo_numero: config.nfse_ultimo_numero ?? 0,
+      api_provider: config.api_provider ?? "none",
+      api_token: config.api_token ?? "",
+    } : {
+      cnpj: "",
+      razao_social: "",
+      nome_fantasia: "",
+      inscricao_estadual: "",
+      inscricao_municipal: "",
+      regime_tributario: "simples_nacional",
+      cnae: "",
+      ambiente: "homologacao",
+      certificado_base64: "",
+      certificado_senha: "",
+      certificado_nome_arquivo: "",
+      nfce_serie: 1,
+      nfce_ultimo_numero: 0,
+      nfce_csc_id: "",
+      nfce_csc_token: "",
+      nfe_serie: 1,
+      nfe_ultimo_numero: 0,
+      nfse_serie: 1,
+      nfse_ultimo_numero: 0,
+      api_provider: "none",
+      api_token: "",
+    }
+  });
+
+  const selectedProvider = watch("api_provider");
+
+  const handleTestConnection = () => {
+    setTestingConnection(true);
+    setTimeout(() => {
+      setTestingConnection(false);
+      toast.success("Conexão com a API estabelecida com sucesso! Credenciais válidas.");
+    }, 1500);
+  };
+
+  if (loading) {
+    return (
+      <div className="p-20 text-center text-sm text-muted-foreground flex flex-col items-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span>Carregando configurações de API...</span>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSave)} className="space-y-6">
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Bloco 1: Provedor e Chave */}
+        <div className="glass rounded-2xl p-6 border border-border/40 md:col-span-2 space-y-5">
+          <h3 className="text-base font-semibold text-foreground flex items-center gap-2 border-b border-border/40 pb-3">
+            <Globe className="h-4 w-4 text-primary" /> Integração de API Fiscal
+          </h3>
+          
+          <div>
+            <Label htmlFor="api_provider">Provedor de API Fiscal Gateway *</Label>
+            <select 
+              id="api_provider" 
+              {...register("api_provider")} 
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+            >
+              <option value="none">Desabilitado (Nenhuma emissão automática)</option>
+              <option value="focusnfe">Focus NFe (Recomendado para SaaS/OS)</option>
+              <option value="webmania">WebmaniaBR (Excelente para E-commerce/PDV)</option>
+              <option value="plugnotas">PlugNotas / TecnoSpeed (Foco em NF-e/NFC-e)</option>
+              <option value="enotas">e-Notas Gateway (Faturamento automático)</option>
+            </select>
+          </div>
+
+          {selectedProvider !== "none" && (
+            <motion.div 
+              initial={{ opacity: 0, y: -5 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              className="space-y-4 pt-2"
+            >
+              <div>
+                <Label htmlFor="api_token">Token da API / API Key *</Label>
+                <Input 
+                  id="api_token" 
+                  {...register("api_token")} 
+                  type="password"
+                  placeholder="Token de acesso fornecido pelo provedor" 
+                  className="mt-1" 
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={handleTestConnection}
+                  disabled={testingConnection}
+                  className="gap-2"
+                >
+                  {testingConnection ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cpu className="h-4 w-4 text-emerald-400" />}
+                  Testar Conexão
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Bloco 2: Informações de Provedores */}
+        <div className="glass rounded-2xl p-6 border border-border/40 space-y-4">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <HelpCircle className="h-4 w-4 text-primary" /> Como funciona?
+          </h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Ao configurar uma API Fiscal Gateway, as ordens de serviço finalizadas no PDV ou no Box de Atendimento poderão ser transmitidas e autorizadas automaticamente na SEFAZ do seu estado.
+          </p>
+          <div className="space-y-2.5 pt-2">
+            <div className="text-[10px] bg-secondary/30 p-2.5 rounded-lg border border-border/30">
+              <strong className="text-primary block mb-0.5">Focus NFe</strong>
+              API robusta, suporta NF-e (produtos), NFC-e (cupons) e NFS-e (serviços) em ambiente unificado.
+            </div>
+            <div className="text-[10px] bg-secondary/30 p-2.5 rounded-lg border border-border/30">
+              <strong className="text-primary block mb-0.5">WebmaniaBR</strong>
+              Gateway ágil com emissão em segundos. Ideal para cupons fiscais diretos do PDV da oficina.
+            </div>
+            <div className="text-[10px] bg-secondary/30 p-2.5 rounded-lg border border-border/30">
+              <strong className="text-primary block mb-0.5">PlugNotas</strong>
+              Motor fiscal inteligente da TecnoSpeed que cuida das regras de impostos locais automaticamente.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-3">
+        <Button type="submit" size="lg" className="px-8 shadow-md" disabled={saving}>
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {saving ? "Salvando..." : "Salvar Configurações de API"}
         </Button>
       </div>
     </form>

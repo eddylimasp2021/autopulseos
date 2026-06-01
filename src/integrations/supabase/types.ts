@@ -289,6 +289,8 @@ export type Database = {
           nfe_ultimo_numero: number
           nfse_serie: number
           nfse_ultimo_numero: number
+          api_provider: string | null
+          api_token: string | null
           created_at: string
           updated_at: string
         }
@@ -314,6 +316,8 @@ export type Database = {
           nfe_ultimo_numero?: number
           nfse_serie?: number
           nfse_ultimo_numero?: number
+          api_provider?: string | null
+          api_token?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -339,6 +343,8 @@ export type Database = {
           nfe_ultimo_numero?: number
           nfse_serie?: number
           nfse_ultimo_numero?: number
+          api_provider?: string | null
+          api_token?: string | null
           created_at?: string
           updated_at?: string
         }

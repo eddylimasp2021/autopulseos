@@ -26,6 +26,9 @@ const FiscalConfigInput = z.object({
   
   nfse_serie: z.number().int().min(1).default(1),
   nfse_ultimo_numero: z.number().int().min(0).default(0),
+  
+  api_provider: z.string().trim().optional().nullable(),
+  api_token: z.string().trim().optional().nullable(),
 });
 
 export const getFiscalConfig = createServerFn({ method: "GET" }).handler(async ({ context }) => {
@@ -67,6 +70,8 @@ export const saveFiscalConfig = createServerFn({ method: "POST" })
           nfe_ultimo_numero: data.nfe_ultimo_numero,
           nfse_serie: data.nfse_serie,
           nfse_ultimo_numero: data.nfse_ultimo_numero,
+          api_provider: data.api_provider,
+          api_token: data.api_token,
           updated_at: new Date().toISOString()
         })
         .eq("id", data.id);
@@ -94,7 +99,9 @@ export const saveFiscalConfig = createServerFn({ method: "POST" })
           nfe_serie: data.nfe_serie,
           nfe_ultimo_numero: data.nfe_ultimo_numero,
           nfse_serie: data.nfse_serie,
-          nfse_ultimo_numero: data.nfse_ultimo_numero
+          nfse_ultimo_numero: data.nfse_ultimo_numero,
+          api_provider: data.api_provider,
+          api_token: data.api_token
         });
       if (error) throw new Error(error.message);
     }
