@@ -744,6 +744,7 @@ export type Database = {
           logo_url: string | null
           name: string
           plan: Database["public"]["Enums"]["workshop_plan"]
+          quantidade_elevadores: number
           slug: string
           trial_ends_at: string
           updated_at: string
@@ -754,6 +755,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           plan?: Database["public"]["Enums"]["workshop_plan"]
+          quantidade_elevadores?: number
           slug: string
           trial_ends_at?: string
           updated_at?: string
@@ -764,6 +766,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           plan?: Database["public"]["Enums"]["workshop_plan"]
+          quantidade_elevadores?: number
           slug?: string
           trial_ends_at?: string
           updated_at?: string

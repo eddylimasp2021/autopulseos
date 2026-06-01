@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wrench, Plus, Trash2, User, Car, Check, Play, ShoppingCart, Loader2, ArrowRightLeft, DollarSign } from "lucide-react";
+import { Wrench, Plus, Minus, Trash2, User, Car, Check, Play, ShoppingCart, Loader2, ArrowRightLeft, DollarSign } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -18,6 +18,7 @@ import { listOrdens, getOrdem, createOrdem, updateOrdemStatus, updateOrdemElevad
 import { listClientes } from "@/lib/clientes.functions";
 import { listVeiculos } from "@/lib/veiculos.functions";
 import { listEstoque } from "@/lib/estoque.functions";
+import { getWorkshop, updateWorkshopElevadores } from "@/lib/configuracoes.functions";
 
 export const Route = createFileRoute("/_authenticated/app/elevadores")({ component: Page });
 
@@ -27,8 +28,6 @@ const OSDialogSchema = z.object({
   descricao: z.string().trim().max(1000).optional(),
 });
 type OSDialogData = z.infer<typeof OSDialogSchema>;
-
-const BAYS = [1, 2, 3, 4, 5, 6, 7];
 
 function Page() {
   const navigate = useNavigate();
@@ -48,13 +47,19 @@ function Page() {
   const addItem = useServerFn(addOSItem);
   const removeItem = useServerFn(removeOSItem);
 
+  const getW = useServerFn(getWorkshop);
+  const updateElevadoresQty = useServerFn(updateWorkshopElevadores);
+
   // Queries
   const { data: ordens = [], isLoading: loadingOs } = useQuery({ queryKey: ["ordens"], queryFn: () => listOs() });
   const { data: clientes = [] } = useQuery({ queryKey: ["clientes"], queryFn: () => listCli() });
   const { data: veiculos = [] } = useQuery({ queryKey: ["veiculos"], queryFn: () => listVei() });
   const { data: estoque = [] } = useQuery({ queryKey: ["estoque"], queryFn: () => listEst() });
+  const { data: workshop, refetch: refetchWorkshop } = useQuery({ queryKey: ["workshop"], queryFn: () => getW() });
 
-  // Map OSs by elevator bay (1-7)
+  const qtyElevadores = workshop?.quantidade_elevadores ?? 7;
+
+  // Map OSs by elevator bay (1-7+)
   const bayMap = useMemo(() => {
     const map: Record<number, any> = {};
     (ordens as any[]).forEach(o => {
@@ -65,14 +70,50 @@ function Page() {
     return map;
   }, [ordens]);
 
+  const BAYS = useMemo(() => {
+    const list = [];
+    for (let i = 1; i <= qtyElevadores; i++) {
+      list.push(i);
+    }
+    return list;
+  }, [qtyElevadores]);
+
   // Mutations
+  const mUpdateQty = useMutation({
+    mutationFn: (qty: number) => updateElevadoresQty({ data: { id: workshop.id, quantidade: qty } }),
+    onSuccess: () => {
+      toast.success("Quantidade de elevadores atualizada!");
+      refetchWorkshop();
+    },
+    onError: (e: Error) => toast.error(e.message)
+  });
+
+  const handleAddElevador = () => {
+    if (!workshop?.id) return;
+    mUpdateQty.mutate(qtyElevadores + 1);
+  };
+
+  const handleRemoveElevador = () => {
+    if (!workshop?.id) return;
+    if (qtyElevadores <= 1) {
+      toast.error("É necessário ter pelo menos 1 elevador.");
+      return;
+    }
+    const lastBay = qtyElevadores;
+    if (bayMap[lastBay]) {
+      toast.error(`O Elevador ${lastBay} está ocupado. Finalize ou desvincule a OS antes de removê-lo.`);
+      return;
+    }
+    mUpdateQty.mutate(qtyElevadores - 1);
+  };
+
   const mCreate = useMutation({
-    mutationFn: (d: OSDialogData & { elevador: number }) => createOs({ data: {
+    mutationFn: (d: OSDialogData & { elevador: number; itens: any[] }) => createOs({ data: {
       cliente_id: d.cliente_id,
       veiculo_id: d.veiculo_id,
       descricao: d.descricao || "Atendimento Elevador " + d.elevador,
       elevador: d.elevador,
-      itens: []
+      itens: d.itens
     } as any }),
     onSuccess: () => {
       toast.success("Atendimento iniciado no elevador!");
@@ -115,14 +156,43 @@ function Page() {
 
   return (
     <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4">
-        <div className="grid h-12 w-12 place-items-center rounded-xl bg-[image:var(--gradient-neon)] neon-border">
-          <Wrench className="h-5 w-5 text-neon-foreground" />
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-[image:var(--gradient-neon)] neon-border">
+            <Wrench className="h-5 w-5 text-neon-foreground" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Painel de Elevadores</h1>
+            <p className="text-sm text-muted-foreground mt-1">Gerencie os boxes de atendimento e adicione produtos em tempo real.</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Painel de Elevadores</h1>
-          <p className="text-sm text-muted-foreground mt-1">Gerencie os boxes de atendimento e adicione produtos em tempo real.</p>
-        </div>
+
+        {workshop && (
+          <div className="flex items-center gap-2 bg-secondary/35 p-1.5 rounded-2xl border border-border/50 self-start sm:self-auto shadow-sm">
+            <span className="text-xs font-semibold text-muted-foreground px-3">
+              {qtyElevadores} {qtyElevadores === 1 ? "Box" : "Boxes"}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRemoveElevador}
+              disabled={mUpdateQty.isPending || qtyElevadores <= 1}
+              className="h-8 px-2.5 rounded-xl text-xs gap-1"
+              title="Remover último box de elevador"
+            >
+              <Minus className="h-3.5 w-3.5" /> Remover
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleAddElevador}
+              disabled={mUpdateQty.isPending}
+              className="h-8 px-2.5 rounded-xl text-xs gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
+              title="Adicionar novo box de elevador"
+            >
+              <Plus className="h-3.5 w-3.5" /> Adicionar
+            </Button>
+          </div>
+        )}
       </motion.div>
 
       {loadingOs ? (
@@ -158,7 +228,8 @@ function Page() {
         bay={selectedBay}
         clientes={clientes as any[]}
         veiculos={veiculos as any[]}
-        onSubmit={(d) => mCreate.mutate({ ...d, elevador: selectedBay! })}
+        estoque={estoque as any[]}
+        onSubmit={(d) => mCreate.mutate({ ...d, elevador: selectedBay! } as any)}
         loading={mCreate.isPending}
       />
     </div>
@@ -468,13 +539,14 @@ function BayCard({
   );
 }
 
-function StartOSDialog({ open, onOpenChange, bay, clientes, veiculos, onSubmit, loading }: {
+function StartOSDialog({ open, onOpenChange, bay, clientes, veiculos, estoque, onSubmit, loading }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   bay: number | null;
   clientes: { id: string; nome: string }[];
   veiculos: { id: string; cliente_id: string; placa: string; marca: string | null; modelo: string | null }[];
-  onSubmit: (d: OSDialogData) => void;
+  estoque: any[];
+  onSubmit: (d: OSDialogData & { itens: any[] }) => void;
   loading: boolean;
 }) {
   const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<OSDialogData>({
@@ -482,53 +554,256 @@ function StartOSDialog({ open, onOpenChange, bay, clientes, veiculos, onSubmit, 
     defaultValues: { cliente_id: "", veiculo_id: "", descricao: "" },
   });
 
+  const [dialogItens, setDialogItens] = useState<{
+    id: string;
+    tipo: "servico" | "peca";
+    descricao: string;
+    quantidade: number;
+    valor_unit: number;
+    estoque_item_id?: string | null;
+  }[]>([]);
+
+  // Item form states
+  const [searchVal, setSearchVal] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [itemQtd, setItemQtd] = useState("1");
+  const [customPrice, setCustomPrice] = useState("0");
+
   const cliId = watch("cliente_id");
   const filteredVehicles = useMemo(() => {
     return veiculos.filter(v => !cliId || v.cliente_id === cliId);
   }, [veiculos, cliId]);
 
+  const catalogOptions = useMemo(() => {
+    const q = searchVal.toLowerCase().trim();
+    if (!q) return [];
+    return estoque.filter(p => p.nome.toLowerCase().includes(q) || (p.codigo ?? "").toLowerCase().includes(q)).slice(0, 5);
+  }, [estoque, searchVal]);
+
+  const handleAddItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    let desc = searchVal.trim();
+    let price = 0;
+    let estoqueId = null;
+    let tipo: "servico" | "peca" = "servico";
+
+    if (selectedProduct) {
+      desc = selectedProduct.nome;
+      price = Number(selectedProduct.preco_venda);
+      estoqueId = selectedProduct.id;
+      tipo = "peca";
+    } else {
+      price = Number(customPrice.replace(",", ".")) || 0;
+    }
+
+    if (!desc) {
+      toast.error("Informe a descrição ou selecione um produto");
+      return;
+    }
+
+    setDialogItens(prev => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        tipo,
+        descricao: desc,
+        quantidade: Number(itemQtd) || 1,
+        valor_unit: price,
+        estoque_item_id: estoqueId
+      }
+    ]);
+
+    // Reset item form
+    setSearchVal("");
+    setSelectedProduct(null);
+    setItemQtd("1");
+    setCustomPrice("0");
+  };
+
+  const handleRemoveItem = (id: string) => {
+    setDialogItens(prev => prev.filter(it => it.id !== id));
+  };
+
+  const totalVal = useMemo(() => {
+    return dialogItens.reduce((sum, item) => sum + item.quantidade * item.valor_unit, 0);
+  }, [dialogItens]);
+
   const handleClose = (v: boolean) => {
-    if (!v) reset();
+    if (!v) {
+      reset();
+      setDialogItens([]);
+      setSearchVal("");
+      setSelectedProduct(null);
+      setItemQtd("1");
+      setCustomPrice("0");
+    }
     onOpenChange(v);
+  };
+
+  const handleFormSubmit = (data: OSDialogData) => {
+    onSubmit({
+      ...data,
+      itens: dialogItens.map(it => ({
+        tipo: it.tipo,
+        descricao: it.descricao,
+        quantidade: it.quantidade,
+        valor_unit: it.valor_unit,
+        estoque_item_id: it.estoque_item_id
+      }))
+    });
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Iniciar Atendimento — Elevador {bay}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
-          <div>
-            <Label htmlFor="os_cliente_id">Cliente *</Label>
-            <select id="os_cliente_id" {...register("cliente_id")} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
-              <option value="">Selecione…</option>
-              {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-            {errors.cliente_id && <p className="text-xs text-destructive mt-1">{errors.cliente_id.message}</p>}
-          </div>
+        
+        <div className="grid gap-6 md:grid-cols-2 pt-2">
+          {/* Coluna 1: Dados da OS */}
+          <form id="start-os-form" onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+            <div>
+              <Label htmlFor="os_cliente_id">Cliente *</Label>
+              <select id="os_cliente_id" {...register("cliente_id")} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                <option value="">Selecione…</option>
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+              {errors.cliente_id && <p className="text-xs text-destructive mt-1">{errors.cliente_id.message}</p>}
+            </div>
 
-          <div>
-            <Label htmlFor="os_veiculo_id">Veículo *</Label>
-            <select id="os_veiculo_id" {...register("veiculo_id")} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
-              <option value="">Selecione…</option>
-              {filteredVehicles.map(v => <option key={v.id} value={v.id}>{v.placa} — {v.marca ?? ""} {v.modelo ?? ""}</option>)}
-            </select>
-            {errors.veiculo_id && <p className="text-xs text-destructive mt-1">{errors.veiculo_id.message}</p>}
-          </div>
+            <div>
+              <Label htmlFor="os_veiculo_id">Veículo *</Label>
+              <select id="os_veiculo_id" {...register("veiculo_id")} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+                <option value="">Selecione…</option>
+                {filteredVehicles.map(v => <option key={v.id} value={v.id}>{v.placa} — {v.marca ?? ""} {v.modelo ?? ""}</option>)}
+              </select>
+              {errors.veiculo_id && <p className="text-xs text-destructive mt-1">{errors.veiculo_id.message}</p>}
+            </div>
 
-          <div>
-            <Label htmlFor="os_desc">Observação Inicial</Label>
-            <Input id="os_desc" {...register("descricao")} placeholder="Ex: Troca de óleo de filtros padrão" className="mt-1" />
-          </div>
+            <div>
+              <Label htmlFor="os_desc">Observação Inicial</Label>
+              <Input id="os_desc" {...register("descricao")} placeholder="Ex: Troca de óleo e filtros padrão" className="mt-1" />
+            </div>
+            
+            <div className="pt-4 border-t border-border/40">
+              <div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Valor Final (Total)</div>
+                <div className="text-2xl font-bold font-display text-primary mt-1">
+                  {totalVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </div>
+              </div>
+            </div>
+          </form>
 
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Iniciando..." : "Confirmar e Iniciar"}
-            </Button>
-          </DialogFooter>
-        </form>
+          {/* Coluna 2: Adicionar Produtos / Serviços */}
+          <div className="space-y-4 border-l border-border/40 pl-0 md:pl-6">
+            <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Incluir Peças & Serviços</div>
+            
+            <div className="bg-secondary/40 p-3 rounded-xl border border-border/60 space-y-2.5 relative">
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Buscar Produto ou Digitar Serviço</Label>
+                <Input
+                  value={searchVal}
+                  onChange={e => { setSearchVal(e.target.value); setSelectedProduct(null); }}
+                  placeholder="Ex: Óleo 5W30 ou Alinhamento"
+                  className="h-8 text-xs bg-background mt-0.5"
+                />
+                {catalogOptions.length > 0 && (
+                  <div className="absolute left-3 right-3 bg-popover border border-border rounded-lg shadow-lg z-20 max-h-36 overflow-y-auto text-xs mt-1 divide-y divide-border">
+                    {catalogOptions.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProduct(p);
+                          setSearchVal(p.nome);
+                          setCustomPrice(String(p.preco_venda));
+                        }}
+                        className="w-full text-left p-2.5 hover:bg-secondary/80 transition flex justify-between"
+                      >
+                        <span>{p.nome}</span>
+                        <span className="font-semibold text-primary">{Number(p.preco_venda).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {selectedProduct && (
+                <div className="text-[10px] text-emerald-500 font-semibold flex items-center gap-1">
+                  <Check className="h-3 w-3" /> Produto do estoque selecionado ({Number(selectedProduct.preco_venda).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
+                </div>
+              )}
+
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <Label className="text-[10px] text-muted-foreground">Qtd</Label>
+                  <Input
+                    type="number"
+                    min="0.1"
+                    step="any"
+                    value={itemQtd}
+                    onChange={e => setItemQtd(e.target.value)}
+                    className="h-8 text-xs bg-background mt-0.5"
+                  />
+                </div>
+                
+                <div className="flex-[2]">
+                  <Label className="text-[10px] text-muted-foreground">Preço Unit. (R$)</Label>
+                  <Input
+                    type="text"
+                    value={selectedProduct ? String(selectedProduct.preco_venda) : customPrice}
+                    disabled={!!selectedProduct}
+                    onChange={e => setCustomPrice(e.target.value)}
+                    placeholder="0,00"
+                    className="h-8 text-xs bg-background mt-0.5"
+                  />
+                </div>
+                
+                <Button type="button" onClick={handleAddItem} size="sm" className="h-8 px-3.5 bg-primary text-primary-foreground hover:bg-primary/90">
+                  Incluir
+                </Button>
+              </div>
+            </div>
+
+            {/* Listagem de itens temporários */}
+            <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1 styled-scrollbar">
+              {dialogItens.map((it) => (
+                <div key={it.id} className="flex items-center justify-between text-xs bg-secondary/20 p-2 rounded-lg hover:bg-secondary/40 transition">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{it.descricao}</div>
+                    <div className="text-[10px] text-muted-foreground tabular-nums">
+                      {it.valor_unit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} × {it.quantidade}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold tabular-nums">
+                      {(it.quantidade * it.valor_unit).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(it.id)}
+                      className="text-destructive hover:bg-destructive/15 p-1 rounded transition"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {dialogItens.length === 0 && (
+                <div className="text-center py-6 text-xs text-muted-foreground">Nenhum produto ou serviço incluído nesta OS ainda.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="pt-4 border-t border-border/40">
+          <Button type="button" variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
+          <Button type="submit" form="start-os-form" disabled={loading}>
+            {loading ? "Iniciando..." : "Confirmar e Iniciar"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

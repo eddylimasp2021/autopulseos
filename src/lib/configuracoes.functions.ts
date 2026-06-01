@@ -5,13 +5,13 @@ export const getWorkshop = createServerFn({ method: "GET" }).handler(async ({ co
   const { supabase } = context as any;
   const { data: members, error: em } = await supabase
     .from("workshop_members")
-    .select("workshop_id,role,workshops(id,name,slug,logo_url,plan,trial_ends_at)")
+    .select("workshop_id,role,workshops(id,name,slug,logo_url,plan,trial_ends_at,quantidade_elevadores)")
     .order("created_at", { ascending: true })
     .limit(1);
   if (em) throw new Error(em.message);
   const m = members?.[0];
   if (!m) return null;
-  return { role: m.role, ...m.workshops };
+  return { role: m.role, ...m.workshops as any };
 });
 
 const WorkshopInput = z.object({
@@ -28,6 +28,20 @@ export const updateWorkshop = createServerFn({ method: "POST" })
     const payload: any = { name: rest.name };
     if (rest.logo_url !== undefined) payload.logo_url = rest.logo_url || null;
     const { error } = await supabase.from("workshops").update(payload).eq("id", id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const updateWorkshopElevadores = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; quantidade: number }) =>
+    z.object({ id: z.string().uuid(), quantidade: z.number().int().min(1).max(50) }).parse(d)
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    const { error } = await supabase
+      .from("workshops")
+      .update({ quantidade_elevadores: data.quantidade })
+      .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
