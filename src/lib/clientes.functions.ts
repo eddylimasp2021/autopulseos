@@ -78,3 +78,83 @@ export const deleteCliente = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+const BulkImportInput = z.array(ClienteInput);
+export type BulkImportInputType = z.infer<typeof BulkImportInput>;
+
+export const bulkImportClientes = createServerFn({ method: "POST" })
+  .inputValidator((d: BulkImportInputType) => BulkImportInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    const cleanedData = data.map((item) => normalize(item));
+
+    // Normaliza documento e email para evitar duplicatas por variação
+    for (const r of cleanedData as any[]) {
+      if (r.documento) r.documento = String(r.documento).replace(/\D/g, "");
+      if (r.documento === "") r.documento = null;
+      if (r.email) r.email = String(r.email).trim().toLowerCase();
+      if (r.email === "") r.email = null;
+    }
+
+    // Dedup local por documento
+    const dedupMapDoc = new Map<string, any>();
+    const withoutDoc = [];
+    
+    for (const r of cleanedData) {
+      if (r.documento) dedupMapDoc.set(r.documento, r);
+      else withoutDoc.push(r);
+    }
+    
+    const dedupedWithDoc = Array.from(dedupMapDoc.values());
+    
+    let inserted = 0;
+    let updated = 0;
+
+    // Lida com os clientes com documento (CPF/CNPJ) -> Upsert
+    if (dedupedWithDoc.length > 0) {
+      const documentos = dedupedWithDoc.map((r) => r.documento);
+      const { data: existingRows, error: existingError } = await supabase
+        .from("clientes")
+        .select("id,documento")
+        .in("documento", documentos);
+
+      if (existingError) throw new Error(existingError.message);
+
+      const existingByDoc = new Map<string, { id: string }>();
+      for (const row of existingRows ?? []) {
+        if (row.documento) existingByDoc.set(String(row.documento).replace(/\D/g, ""), row as { id: string });
+      }
+
+      const toInsert = dedupedWithDoc.filter((row) => !existingByDoc.has(row.documento));
+      const toUpdate = dedupedWithDoc
+        .filter((row) => existingByDoc.has(row.documento))
+        .map((row) => ({ ...row, id: existingByDoc.get(row.documento)!.id }));
+
+      if (toInsert.length > 0) {
+        const { error, count } = await supabase.from("clientes").insert(toInsert, { count: "exact" });
+        if (error) throw new Error(error.message);
+        inserted += count ?? toInsert.length;
+      }
+
+      for (const row of toUpdate) {
+        const { id, ...payload } = row;
+        const { error } = await supabase.from("clientes").update(payload).eq("id", id);
+        if (error) throw new Error(error.message);
+      }
+      updated += toUpdate.length;
+    }
+
+    // Lida com os clientes sem documento -> apenas insert (aqui poderíamos checar por email, mas mantemos simples)
+    if (withoutDoc.length > 0) {
+      const { error, count } = await supabase.from("clientes").insert(withoutDoc, { count: "exact" });
+      if (error) throw new Error(error.message);
+      inserted += count ?? withoutDoc.length;
+    }
+
+    return {
+      ok: true,
+      processados: cleanedData.length,
+      inseridos: inserted,
+      atualizados: updated,
+    };
+  });
