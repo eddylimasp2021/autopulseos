@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, Car, ClipboardList, Droplet, Package,
   ShoppingCart, Wallet, BarChart3, Calendar, MessageCircle, Settings, Zap, Wrench,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ const items: Item[] = [
   { to: "/app/estoque", label: "Estoque", icon: Package },
   { to: "/app/pdv", label: "PDV", icon: ShoppingCart },
   { to: "/app/financeiro", label: "Financeiro", icon: Wallet },
+  { to: "/app/fiscal", label: "Fiscal", icon: Receipt },
   { to: "/app/relatorios", label: "Relatórios", icon: BarChart3 },
   { to: "/app/agenda", label: "Agenda", icon: Calendar },
   { to: "/app/whatsapp", label: "WhatsApp", icon: MessageCircle },

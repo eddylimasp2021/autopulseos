@@ -266,6 +266,151 @@ export type Database = {
           },
         ]
       }
+      fiscal_config: {
+        Row: {
+          id: string
+          workshop_id: string
+          cnpj: string | null
+          razao_social: string | null
+          nome_fantasia: string | null
+          inscricao_estadual: string | null
+          inscricao_municipal: string | null
+          regime_tributario: string | null
+          cnae: string | null
+          ambiente: string
+          certificado_base64: string | null
+          certificado_senha: string | null
+          certificado_nome_arquivo: string | null
+          nfce_serie: number
+          nfce_ultimo_numero: number
+          nfce_csc_id: string | null
+          nfce_csc_token: string | null
+          nfe_serie: number
+          nfe_ultimo_numero: number
+          nfse_serie: number
+          nfse_ultimo_numero: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workshop_id: string
+          cnpj?: string | null
+          razao_social?: string | null
+          nome_fantasia?: string | null
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          regime_tributario?: string | null
+          cnae?: string | null
+          ambiente?: string
+          certificado_base64?: string | null
+          certificado_senha?: string | null
+          certificado_nome_arquivo?: string | null
+          nfce_serie?: number
+          nfce_ultimo_numero?: number
+          nfce_csc_id?: string | null
+          nfce_csc_token?: string | null
+          nfe_serie?: number
+          nfe_ultimo_numero?: number
+          nfse_serie?: number
+          nfse_ultimo_numero?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workshop_id?: string
+          cnpj?: string | null
+          razao_social?: string | null
+          nome_fantasia?: string | null
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          regime_tributario?: string | null
+          cnae?: string | null
+          ambiente?: string
+          certificado_base64?: string | null
+          certificado_senha?: string | null
+          certificado_nome_arquivo?: string | null
+          nfce_serie?: number
+          nfce_ultimo_numero?: number
+          nfce_csc_id?: string | null
+          nfce_csc_token?: string | null
+          nfe_serie?: number
+          nfe_ultimo_numero?: number
+          nfse_serie?: number
+          nfse_ultimo_numero?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_config_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      fiscal_xmls: {
+        Row: {
+          id: string
+          workshop_id: string
+          tipo: "nfe_emitida" | "nfce_emitida" | "nfe_importada"
+          chave: string
+          numero: number
+          serie: number
+          data_emissao: string
+          valor_total: number
+          xml_content: string
+          xml_filename: string
+          destinatario_nome: string | null
+          destinatario_documento: string | null
+          status: "autorizada" | "cancelada" | "importada"
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          workshop_id: string
+          tipo: "nfe_emitida" | "nfce_emitida" | "nfe_importada"
+          chave: string
+          numero: number
+          serie: number
+          data_emissao: string
+          valor_total?: number
+          xml_content: string
+          xml_filename: string
+          destinatario_nome?: string | null
+          destinatario_documento?: string | null
+          status?: "autorizada" | "cancelada" | "importada"
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          workshop_id?: string
+          tipo?: "nfe_emitida" | "nfce_emitida" | "nfe_importada"
+          chave?: string
+          numero?: number
+          serie?: number
+          data_emissao?: string
+          valor_total?: number
+          xml_content?: string
+          xml_filename?: string
+          destinatario_nome?: string | null
+          destinatario_documento?: string | null
+          status?: "autorizada" | "cancelada" | "importada"
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_xmls_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       ordens_servico: {
         Row: {
           cliente_id: string

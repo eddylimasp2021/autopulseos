@@ -20,6 +20,7 @@ import { Route as AuthenticatedAppTrocaOleoRouteImport } from './routes/_authent
 import { Route as AuthenticatedAppRelatoriosRouteImport } from './routes/_authenticated/app.relatorios'
 import { Route as AuthenticatedAppPdvRouteImport } from './routes/_authenticated/app.pdv'
 import { Route as AuthenticatedAppOrdensRouteImport } from './routes/_authenticated/app.ordens'
+import { Route as AuthenticatedAppFiscalRouteImport } from './routes/_authenticated/app.fiscal'
 import { Route as AuthenticatedAppFinanceiroRouteImport } from './routes/_authenticated/app.financeiro'
 import { Route as AuthenticatedAppEstoqueRouteImport } from './routes/_authenticated/app.estoque'
 import { Route as AuthenticatedAppElevadoresRouteImport } from './routes/_authenticated/app.elevadores'
@@ -87,6 +88,11 @@ const AuthenticatedAppOrdensRoute = AuthenticatedAppOrdensRouteImport.update({
   path: '/ordens',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppFiscalRoute = AuthenticatedAppFiscalRouteImport.update({
+  id: '/fiscal',
+  path: '/fiscal',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
 const AuthenticatedAppFinanceiroRoute =
   AuthenticatedAppFinanceiroRouteImport.update({
     id: '/financeiro',
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
+  '/app/fiscal': typeof AuthenticatedAppFiscalRoute
   '/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/app/pdv': typeof AuthenticatedAppPdvRoute
   '/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
+  '/app/fiscal': typeof AuthenticatedAppFiscalRoute
   '/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/app/pdv': typeof AuthenticatedAppPdvRoute
   '/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/_authenticated/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/_authenticated/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/_authenticated/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
+  '/_authenticated/app/fiscal': typeof AuthenticatedAppFiscalRoute
   '/_authenticated/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/_authenticated/app/pdv': typeof AuthenticatedAppPdvRoute
   '/_authenticated/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
@@ -207,6 +216,7 @@ export interface FileRouteTypes {
     | '/app/elevadores'
     | '/app/estoque'
     | '/app/financeiro'
+    | '/app/fiscal'
     | '/app/ordens'
     | '/app/pdv'
     | '/app/relatorios'
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/app/elevadores'
     | '/app/estoque'
     | '/app/financeiro'
+    | '/app/fiscal'
     | '/app/ordens'
     | '/app/pdv'
     | '/app/relatorios'
@@ -247,6 +258,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/elevadores'
     | '/_authenticated/app/estoque'
     | '/_authenticated/app/financeiro'
+    | '/_authenticated/app/fiscal'
     | '/_authenticated/app/ordens'
     | '/_authenticated/app/pdv'
     | '/_authenticated/app/relatorios'
@@ -345,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppOrdensRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/fiscal': {
+      id: '/_authenticated/app/fiscal'
+      path: '/fiscal'
+      fullPath: '/app/fiscal'
+      preLoaderRoute: typeof AuthenticatedAppFiscalRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/financeiro': {
       id: '/_authenticated/app/financeiro'
       path: '/financeiro'
@@ -411,6 +430,7 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppElevadoresRoute: typeof AuthenticatedAppElevadoresRoute
   AuthenticatedAppEstoqueRoute: typeof AuthenticatedAppEstoqueRoute
   AuthenticatedAppFinanceiroRoute: typeof AuthenticatedAppFinanceiroRoute
+  AuthenticatedAppFiscalRoute: typeof AuthenticatedAppFiscalRoute
   AuthenticatedAppOrdensRoute: typeof AuthenticatedAppOrdensRoute
   AuthenticatedAppPdvRoute: typeof AuthenticatedAppPdvRoute
   AuthenticatedAppRelatoriosRoute: typeof AuthenticatedAppRelatoriosRoute
@@ -427,6 +447,7 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppElevadoresRoute: AuthenticatedAppElevadoresRoute,
   AuthenticatedAppEstoqueRoute: AuthenticatedAppEstoqueRoute,
   AuthenticatedAppFinanceiroRoute: AuthenticatedAppFinanceiroRoute,
+  AuthenticatedAppFiscalRoute: AuthenticatedAppFiscalRoute,
   AuthenticatedAppOrdensRoute: AuthenticatedAppOrdensRoute,
   AuthenticatedAppPdvRoute: AuthenticatedAppPdvRoute,
   AuthenticatedAppRelatoriosRoute: AuthenticatedAppRelatoriosRoute,
