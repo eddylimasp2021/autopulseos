@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { listOrdens, createOrdem, updateOrdemStatus, deleteOrdem } from "@/lib/ordens.functions";
 import { listClientes, createCliente } from "@/lib/clientes.functions";
-import { listVeiculos } from "@/lib/veiculos.functions";
+import { listVeiculos, createVeiculo } from "@/lib/veiculos.functions";
 
 export const Route = createFileRoute("/_authenticated/app/ordens")({ component: Page });
 
@@ -199,12 +199,21 @@ function OSDialog({ open, onOpenChange, clientes, veiculos, onSubmit, loading }:
 
   const qc = useQueryClient();
   const createCli = useServerFn(createCliente);
+  const createVei = useServerFn(createVeiculo);
 
   const [showQuickCliente, setShowQuickCliente] = useState(false);
   const [quickNome, setQuickNome] = useState("");
   const [quickTelefone, setQuickTelefone] = useState("");
   const [quickEmail, setQuickEmail] = useState("");
   const [quickDocumento, setQuickDocumento] = useState("");
+
+  const [quickPlaca, setQuickPlaca] = useState("");
+  const [quickMarca, setQuickMarca] = useState("");
+  const [quickModelo, setQuickModelo] = useState("");
+  const [quickAno, setQuickAno] = useState("");
+  const [quickCor, setQuickCor] = useState("");
+  const [quickKm, setQuickKm] = useState("");
+
   const [quickLoading, setQuickLoading] = useState(false);
 
   const handleCreateQuickCliente = async () => {
@@ -212,9 +221,14 @@ function OSDialog({ open, onOpenChange, clientes, veiculos, onSubmit, loading }:
       toast.error("Nome do cliente é obrigatório");
       return;
     }
+    if (!quickPlaca.trim()) {
+      toast.error("Placa do veículo é obrigatória");
+      return;
+    }
     setQuickLoading(true);
     try {
-      const res = await createCli({
+      // 1. Criar Cliente
+      const resCli = await createCli({
         data: {
           nome: quickNome.trim(),
           telefone: quickTelefone.trim() || undefined,
@@ -222,18 +236,59 @@ function OSDialog({ open, onOpenChange, clientes, veiculos, onSubmit, loading }:
           documento: quickDocumento.trim() || undefined,
         }
       });
-      toast.success("Cliente criado com sucesso!");
-      await qc.invalidateQueries({ queryKey: ["clientes"] });
-      setValue("cliente_id", res.id);
-      
+
+      // 2. Criar Veículo
+      const resVei = await createVei({
+        data: {
+          cliente_id: resCli.id,
+          placa: quickPlaca.trim().toUpperCase(),
+          marca: quickMarca.trim() || undefined,
+          modelo: quickModelo.trim() || undefined,
+          ano: quickAno ? Number(quickAno) : undefined,
+          cor: quickCor.trim() || undefined,
+          km_atual: quickKm ? Number(quickKm) : undefined,
+        }
+      });
+
+      toast.success("Cliente e Veículo cadastrados com sucesso!");
+
+      // Atualiza cache de clientes de forma síncrona
+      qc.setQueryData(["clientes"], (old: any) => {
+        const arr = Array.isArray(old) ? old : [];
+        return [resCli, ...arr];
+      });
+
+      // Atualiza cache de veículos de forma síncrona
+      qc.setQueryData(["veiculos"], (old: any) => {
+        const arr = Array.isArray(old) ? old : [];
+        return [{ ...resVei, clientes: { nome: resCli.nome } }, ...arr];
+      });
+
+      // Invalida em background
+      qc.invalidateQueries({ queryKey: ["clientes"] });
+      qc.invalidateQueries({ queryKey: ["veiculos"] });
+
+      // Seleciona automaticamente na OS
+      setValue("cliente_id", resCli.id);
+      setValue("veiculo_id", resVei.id);
+      if (quickKm) {
+        setValue("km_entrada", quickKm);
+      }
+
       // Limpa formulário rápido
       setQuickNome("");
       setQuickTelefone("");
       setQuickEmail("");
       setQuickDocumento("");
+      setQuickPlaca("");
+      setQuickMarca("");
+      setQuickModelo("");
+      setQuickAno("");
+      setQuickCor("");
+      setQuickKm("");
       setShowQuickCliente(false);
     } catch (e: any) {
-      toast.error(e.message || "Erro ao criar cliente");
+      toast.error(e.message || "Erro ao cadastrar dados");
     } finally {
       setQuickLoading(false);
     }
@@ -262,31 +317,64 @@ function OSDialog({ open, onOpenChange, clientes, veiculos, onSubmit, loading }:
                 initial={{ height: 0, opacity: 0 }} 
                 animate={{ height: "auto", opacity: 1 }} 
                 exit={{ height: 0, opacity: 0 }}
-                className="mb-3 overflow-hidden p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3"
+                className="mb-3 overflow-hidden p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4 max-h-[50vh] overflow-y-auto"
               >
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-primary">Cadastro Rápido de Cliente</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <Label htmlFor="quick_nome" className="text-xs">Nome *</Label>
-                    <Input id="quick_nome" value={quickNome} onChange={e => setQuickNome(e.target.value)} placeholder="Nome completo" className="h-8 text-xs" />
-                  </div>
-                  <div>
-                    <Label htmlFor="quick_telefone" className="text-xs">Telefone</Label>
-                    <Input id="quick_telefone" value={quickTelefone} onChange={e => setQuickTelefone(e.target.value)} placeholder="Ex: (11) 99999-9999" className="h-8 text-xs" />
-                  </div>
-                  <div>
-                    <Label htmlFor="quick_documento" className="text-xs">CPF/CNPJ</Label>
-                    <Input id="quick_documento" value={quickDocumento} onChange={e => setQuickDocumento(e.target.value)} placeholder="Apenas números" className="h-8 text-xs" />
-                  </div>
-                  <div className="col-span-2">
-                    <Label htmlFor="quick_email" className="text-xs">Email</Label>
-                    <Input id="quick_email" type="email" value={quickEmail} onChange={e => setQuickEmail(e.target.value)} placeholder="email@exemplo.com" className="h-8 text-xs" />
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-primary border-b border-primary/10 pb-1">Dados do Cliente</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <Label htmlFor="quick_nome" className="text-xs">Nome *</Label>
+                      <Input id="quick_nome" value={quickNome} onChange={e => setQuickNome(e.target.value)} placeholder="Nome completo" className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label htmlFor="quick_telefone" className="text-xs">Telefone</Label>
+                      <Input id="quick_telefone" value={quickTelefone} onChange={e => setQuickTelefone(e.target.value)} placeholder="Ex: (11) 99999-9999" className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label htmlFor="quick_documento" className="text-xs">CPF/CNPJ</Label>
+                      <Input id="quick_documento" value={quickDocumento} onChange={e => setQuickDocumento(e.target.value)} placeholder="Apenas números" className="h-8 text-xs" />
+                    </div>
+                    <div className="col-span-2">
+                      <Label htmlFor="quick_email" className="text-xs">Email</Label>
+                      <Input id="quick_email" type="email" value={quickEmail} onChange={e => setQuickEmail(e.target.value)} placeholder="email@exemplo.com" className="h-8 text-xs" />
+                    </div>
                   </div>
                 </div>
-                <div className="flex justify-end gap-2 pt-1">
+
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-primary border-b border-primary/10 pb-1">Dados do Veículo</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label htmlFor="quick_placa" className="text-xs">Placa *</Label>
+                      <Input id="quick_placa" value={quickPlaca} onChange={e => setQuickPlaca(e.target.value)} placeholder="ABC-1234" className="h-8 text-xs uppercase" />
+                    </div>
+                    <div>
+                      <Label htmlFor="quick_marca" className="text-xs">Marca</Label>
+                      <Input id="quick_marca" value={quickMarca} onChange={e => setQuickMarca(e.target.value)} placeholder="Ex: Chevrolet" className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label htmlFor="quick_modelo" className="text-xs">Modelo</Label>
+                      <Input id="quick_modelo" value={quickModelo} onChange={e => setQuickModelo(e.target.value)} placeholder="Ex: Onix" className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label htmlFor="quick_ano" className="text-xs">Ano</Label>
+                      <Input id="quick_ano" type="number" value={quickAno} onChange={e => setQuickAno(e.target.value)} placeholder="Ex: 2020" className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label htmlFor="quick_cor" className="text-xs">Cor</Label>
+                      <Input id="quick_cor" value={quickCor} onChange={e => setQuickCor(e.target.value)} placeholder="Ex: Preto" className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <Label htmlFor="quick_km" className="text-xs">KM atual</Label>
+                      <Input id="quick_km" type="number" value={quickKm} onChange={e => setQuickKm(e.target.value)} placeholder="Ex: 50000" className="h-8 text-xs" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
                   <Button type="button" size="sm" variant="outline" onClick={() => setShowQuickCliente(false)} className="h-7 text-xs">Cancelar</Button>
                   <Button type="button" size="sm" onClick={handleCreateQuickCliente} disabled={quickLoading} className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
-                    {quickLoading ? "Salvando..." : "Salvar Cliente"}
+                    {quickLoading ? "Salvando..." : "Confirmar Cadastro"}
                   </Button>
                 </div>
               </motion.div>
