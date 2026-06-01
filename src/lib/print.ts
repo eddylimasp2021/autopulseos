@@ -61,17 +61,24 @@ export function imprimirCupomNaoFiscal(data: CupomData) {
       <table>
         <thead>
           <tr>
-            <th>Qtd</th>
-            <th>Item</th>
-            <th class="right">Total</th>
+            <th style="text-align: left; padding-bottom: 4px;">Descrição / Qtd x Unit.</th>
+            <th class="right" style="padding-bottom: 4px;">Total</th>
           </tr>
         </thead>
         <tbody>
           ${data.itens.map(item => `
             <tr>
-              <td>${item.qtd}</td>
-              <td>${item.nome.substring(0, 20)}${item.nome.length > 20 ? '...' : ''}</td>
-              <td class="right">${brl(item.preco * item.qtd)}</td>
+              <td colspan="2" style="font-weight: bold; padding-top: 5px;">
+                ${item.nome}
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px dashed #ccc;">
+              <td style="color: #444; padding-bottom: 5px; font-size: 11px;">
+                ${Number(item.qtd)}x ${brl(item.preco)}
+              </td>
+              <td class="right" style="padding-bottom: 5px; font-size: 11px;">
+                ${brl(item.preco * item.qtd)}
+              </td>
             </tr>
           `).join('')}
         </tbody>
