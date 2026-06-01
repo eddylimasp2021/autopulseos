@@ -261,6 +261,7 @@ function BayCard({
   const [searchVal, setSearchVal] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [itemQtd, setItemQtd] = useState("1");
+  const [customPrice, setCustomPrice] = useState("0");
   const [loadingAction, setLoadingAction] = useState(false);
 
   const getOrdemFn = useServerFn(getOrdem);
@@ -282,6 +283,12 @@ function BayCard({
     return estoque.filter(p => p.nome.toLowerCase().includes(q) || (p.codigo ?? "").toLowerCase().includes(q)).slice(0, 5);
   }, [estoque, searchVal]);
 
+  const currentSubtotal = useMemo(() => {
+    const qty = Number(itemQtd.replace(",", ".")) || 0;
+    const price = selectedProduct ? Number(selectedProduct.preco_venda) : (Number(customPrice.replace(",", ".")) || 0);
+    return qty * price;
+  }, [itemQtd, selectedProduct, customPrice]);
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!os?.id) return;
@@ -296,6 +303,8 @@ function BayCard({
       price = Number(selectedProduct.preco_venda);
       estoqueId = selectedProduct.id;
       tipo = "peca";
+    } else {
+      price = Number(customPrice.replace(",", ".")) || 0;
     }
 
     if (!desc) {
@@ -309,7 +318,7 @@ function BayCard({
         os_id: os.id,
         tipo,
         descricao: desc,
-        quantidade: Number(itemQtd) || 1,
+        quantidade: Number(itemQtd.replace(",", ".")) || 1,
         valor_unit: price,
         estoque_item_id: estoqueId
       });
@@ -321,6 +330,7 @@ function BayCard({
       setSearchVal("");
       setSelectedProduct(null);
       setItemQtd("1");
+      setCustomPrice("0");
       setShowAddForm(false);
     } catch (e: any) {
       toast.error(e.message || "Erro ao adicionar item");
@@ -424,6 +434,7 @@ function BayCard({
                             onClick={() => {
                               setSelectedProduct(p);
                               setSearchVal(p.nome);
+                              setCustomPrice(String(p.preco_venda));
                             }}
                             className="w-full text-left p-2.5 hover:bg-secondary/80 transition flex justify-between"
                           >
@@ -441,36 +452,35 @@ function BayCard({
                     </div>
                   )}
 
+                  {currentSubtotal > 0 && (
+                    <div className="text-[10px] text-primary/80 font-medium flex justify-between items-center bg-primary/10 border border-primary/25 rounded-md px-2 py-1">
+                      <span>Subtotal do Item:</span>
+                      <span className="font-bold tabular-nums text-primary">{currentSubtotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                    </div>
+                  )}
+
                   <div className="flex gap-2 items-end">
                     <div className="flex-1">
                       <Label className="text-[10px] text-muted-foreground">Qtd</Label>
                       <Input
-                        type="number"
-                        min="0.1"
-                        step="any"
+                        type="text"
                         value={itemQtd}
                         onChange={e => setItemQtd(e.target.value)}
                         className="h-8 text-xs bg-background"
                       />
                     </div>
-                    {!selectedProduct && (
-                      <div className="flex-[2]">
-                        <Label className="text-[10px] text-muted-foreground">Preço Unit. (R$)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="0,00"
-                          defaultValue="0"
-                          onChange={e => {
-                            const val = Number(e.target.value) || 0;
-                            // Se for custom, lidamos no handleAdd
-                          }}
-                          id="custom_price"
-                          className="h-8 text-xs bg-background"
-                        />
-                      </div>
-                    )}
-                    <Button type="submit" size="sm" className="h-8 px-3" disabled={loadingAction}>
+                    <div className="flex-[2]">
+                      <Label className="text-[10px] text-muted-foreground">Preço Unit. (R$)</Label>
+                      <Input
+                        type="text"
+                        value={selectedProduct ? String(selectedProduct.preco_venda) : customPrice}
+                        disabled={!!selectedProduct}
+                        onChange={e => setCustomPrice(e.target.value)}
+                        placeholder="0,00"
+                        className="h-8 text-xs bg-background"
+                      />
+                    </div>
+                    <Button type="submit" size="sm" className="h-8 px-3 bg-primary text-primary-foreground hover:bg-primary/90" disabled={loadingAction}>
                       Add
                     </Button>
                   </div>
@@ -607,7 +617,7 @@ function StartOSDialog({ open, onOpenChange, bay, clientes, veiculos, estoque, o
         id: crypto.randomUUID(),
         tipo,
         descricao: desc,
-        quantidade: Number(itemQtd) || 1,
+        quantidade: Number(itemQtd.replace(",", ".")) || 1,
         valor_unit: price,
         estoque_item_id: estoqueId
       }
@@ -623,6 +633,12 @@ function StartOSDialog({ open, onOpenChange, bay, clientes, veiculos, estoque, o
   const handleRemoveItem = (id: string) => {
     setDialogItens(prev => prev.filter(it => it.id !== id));
   };
+
+  const currentSubtotal = useMemo(() => {
+    const qty = Number(itemQtd.replace(",", ".")) || 0;
+    const price = selectedProduct ? Number(selectedProduct.preco_venda) : (Number(customPrice.replace(",", ".")) || 0);
+    return qty * price;
+  }, [itemQtd, selectedProduct, customPrice]);
 
   const totalVal = useMemo(() => {
     return dialogItens.reduce((sum, item) => sum + item.quantidade * item.valor_unit, 0);
@@ -736,13 +752,18 @@ function StartOSDialog({ open, onOpenChange, bay, clientes, veiculos, estoque, o
                 </div>
               )}
 
+              {currentSubtotal > 0 && (
+                <div className="text-[10px] text-primary/80 font-medium flex justify-between items-center bg-primary/10 border border-primary/25 rounded-md px-2 py-1">
+                  <span>Subtotal do Item:</span>
+                  <span className="font-bold tabular-nums text-primary">{currentSubtotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                </div>
+              )}
+
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
                   <Label className="text-[10px] text-muted-foreground">Qtd</Label>
                   <Input
-                    type="number"
-                    min="0.1"
-                    step="any"
+                    type="text"
                     value={itemQtd}
                     onChange={e => setItemQtd(e.target.value)}
                     className="h-8 text-xs bg-background mt-0.5"
