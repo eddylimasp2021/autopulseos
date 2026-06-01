@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Package, Search, Plus, AlertTriangle, TrendingUp, TrendingDown, Pencil, Trash2, ArrowDownUp, Printer, QrCode } from "lucide-react";
+import { Package, Search, Plus, AlertTriangle, TrendingUp, TrendingDown, Pencil, Trash2, ArrowDownUp, Printer, QrCode, Camera, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileSpreadsheet, Check } from "lucide-react";
 import Papa from "papaparse";
 import Papa from "papaparse";
-import { listEstoque, createEstoqueItem, updateEstoqueItem, deleteEstoqueItem, createMovimentacao, bulkImportEstoque } from "@/lib/estoque.functions";
+import { listEstoque, createEstoqueItem, updateEstoqueItem, deleteEstoqueItem, createMovimentacao, bulkImportEstoque, uploadProdutoImagem } from "@/lib/estoque.functions";
 import { imprimirEtiquetas, EtiquetaLayout, EtiquetaItem } from "@/lib/etiquetas";
 
 export const Route = createFileRoute("/_authenticated/app/estoque")({ component: Page });
@@ -33,11 +33,13 @@ const Schema = z.object({
   preco_custo: z.string().optional(),
   preco_venda: z.string().optional(),
   fornecedor: z.string().trim().max(120).optional(),
+  fornecedor: z.string().trim().max(120).optional(),
   observacoes: z.string().trim().max(1000).optional(),
+  imagem_url: z.string().url().optional().nullable().or(z.literal("")),
 });
 type FormData = z.infer<typeof Schema>;
 
-type Item = { id: string; nome: string; codigo: string | null; categoria: string | null; unidade: string | null; quantidade: number; qtd_minima: number; preco_custo: number; preco_venda: number; fornecedor: string | null };
+type Item = { id: string; nome: string; codigo: string | null; categoria: string | null; unidade: string | null; quantidade: number; qtd_minima: number; preco_custo: number; preco_venda: number; fornecedor: string | null; imagem_url: string | null };
 
 function Page() {
   const [busca, setBusca] = useState("");
@@ -128,8 +130,9 @@ function Page() {
       </motion.div>
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-        <TabsList className="bg-secondary/50 border border-border/50">
+        <TabsList className="bg-secondary/50 border border-border/50 overflow-x-auto flex-nowrap w-full justify-start styled-scrollbar">
           <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
+          <TabsTrigger value="catalogo">Catálogo</TabsTrigger>
           <TabsTrigger value="importacao">Importação (Arquivo)</TabsTrigger>
           <TabsTrigger value="manual">Importação (Copiar/Colar)</TabsTrigger>
           <TabsTrigger value="etiquetas">Gerar Etiquetas</TabsTrigger>
@@ -232,6 +235,42 @@ function Page() {
       </div>
       </TabsContent>
 
+      <TabsContent value="catalogo" className="space-y-6 mt-0">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar no catálogo..." className="w-full rounded-xl border border-border bg-secondary/50 pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {produtos.map(p => {
+            const baixo = Number(p.quantidade) <= Number(p.qtd_minima);
+            return (
+              <div key={p.id} className="glass rounded-xl overflow-hidden group flex flex-col cursor-pointer border border-border/40 hover:border-primary/50 transition-colors" onClick={() => { setEditing(p); setOpenForm(true); }}>
+                <div className="aspect-square bg-secondary/30 relative overflow-hidden flex-shrink-0">
+                  {p.imagem_url ? (
+                    <img src={p.imagem_url} alt={p.nome} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground opacity-50 group-hover:opacity-80 transition">
+                      <Package className="h-10 w-10 mb-2" />
+                      <span className="text-xs">Sem Imagem</span>
+                    </div>
+                  )}
+                  {baixo && <div className="absolute top-2 right-2 bg-destructive/90 text-destructive-foreground text-[10px] uppercase font-bold px-2 py-0.5 rounded shadow-sm">Estoque Baixo</div>}
+                </div>
+                <div className="p-3 flex flex-col flex-1 bg-background/50">
+                  <div className="text-xs text-muted-foreground mb-1 font-mono">{p.codigo || "S/ COD"}</div>
+                  <div className="font-medium text-sm leading-tight mb-2 line-clamp-2 flex-1 group-hover:text-primary transition-colors">{p.nome}</div>
+                  <div className="flex items-end justify-between mt-auto pt-2 border-t border-border/50">
+                    <div className="font-semibold text-primary">{fmt(Number(p.preco_venda))}</div>
+                    <div className="text-xs text-muted-foreground">{Number(p.quantidade)} {p.unidade || "un"}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {!isLoading && produtos.length === 0 && <div className="p-10 text-center text-muted-foreground text-sm glass rounded-2xl">Nenhum item encontrado no catálogo.</div>}
+      </TabsContent>
+
       <TabsContent value="importacao" className="mt-0">
         <Importador onImportDone={() => { invalidate(); setTab("visao-geral"); }} mode="file" />
       </TabsContent>
@@ -252,7 +291,7 @@ function Page() {
             nome: d.nome, codigo: d.codigo, categoria: d.categoria, unidade: d.unidade,
             quantidade: Number(d.quantidade || 0), qtd_minima: Number(d.qtd_minima || 0),
             preco_custo: Number(d.preco_custo || 0), preco_venda: Number(d.preco_venda || 0),
-            fornecedor: d.fornecedor, observacoes: d.observacoes,
+            fornecedor: d.fornecedor, observacoes: d.observacoes, imagem_url: d.imagem_url
           };
           if (editing) mUpdate.mutate({ ...payload, id: editing.id });
           else mCreate.mutate(payload);
@@ -268,44 +307,95 @@ function ItemDialog({ open, onOpenChange, initial, onSubmit, loading }: {
   open: boolean; onOpenChange: (v: boolean) => void; initial: Item | null;
   onSubmit: (d: FormData) => void; loading: boolean;
 }) {
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(Schema),
     values: initial ? {
       nome: initial.nome, codigo: initial.codigo ?? "", categoria: initial.categoria ?? "",
       unidade: initial.unidade ?? "", quantidade: String(initial.quantidade), qtd_minima: String(initial.qtd_minima),
       preco_custo: String(initial.preco_custo), preco_venda: String(initial.preco_venda),
-      fornecedor: initial.fornecedor ?? "", observacoes: "",
-    } : { nome: "", codigo: "", categoria: "", unidade: "un", quantidade: "0", qtd_minima: "0", preco_custo: "0", preco_venda: "0", fornecedor: "", observacoes: "" },
+      fornecedor: initial.fornecedor ?? "", observacoes: initial.observacoes ?? "", imagem_url: initial.imagem_url ?? ""
+    } : { nome: "", codigo: "", categoria: "", unidade: "un", quantidade: "0", qtd_minima: "0", preco_custo: "0", preco_venda: "0", fornecedor: "", observacoes: "", imagem_url: "" },
   });
+
+  const [uploading, setUploading] = useState(false);
+  const upImage = useServerFn(uploadProdutoImagem);
+  const imgUrl = watch("imagem_url");
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const base64 = (evt.target?.result as string).split(',')[1];
+        const res = await upImage({ data: { fileBase64: base64, fileName: f.name, contentType: f.type } });
+        setValue("imagem_url", res.url);
+        setUploading(false);
+      };
+      reader.readAsDataURL(f);
+    } catch (err: any) {
+      toast.error("Erro no upload da imagem");
+      setUploading(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto styled-scrollbar">
         <DialogHeader><DialogTitle>{initial ? "Editar item" : "Novo item"}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-          <div>
-            <Label htmlFor="nome">Nome *</Label>
-            <Input id="nome" {...register("nome")} />
-            {errors.nome && <p className="text-xs text-destructive mt-1">{errors.nome.message}</p>}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="flex flex-col md:flex-row gap-6">
+            
+            {/* Bloco de Imagem */}
+            <div className="w-full md:w-1/3 flex flex-col gap-2">
+              <Label>Imagem do Produto</Label>
+              <div className="relative aspect-square rounded-2xl border-2 border-dashed border-border overflow-hidden group bg-secondary/30 flex items-center justify-center">
+                {imgUrl ? (
+                  <>
+                    <img src={imgUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <button type="button" onClick={() => setValue("imagem_url", "")} className="absolute top-2 right-2 bg-background/80 backdrop-blur-md p-1.5 rounded-full text-destructive hover:bg-destructive hover:text-destructive-foreground transition opacity-0 group-hover:opacity-100">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center p-4">
+                    {uploading ? <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" /> : <Camera className="h-8 w-8 text-muted-foreground mx-auto mb-2" />}
+                    <div className="text-xs text-muted-foreground font-medium">{uploading ? "Enviando..." : "Clique para alterar"}</div>
+                  </div>
+                )}
+                <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFile} disabled={uploading} title="" />
+              </div>
+            </div>
+
+            {/* Campos */}
+            <div className="w-full md:w-2/3 space-y-3">
+              <div>
+                <Label htmlFor="nome">Nome *</Label>
+                <Input id="nome" {...register("nome")} />
+                {errors.nome && <p className="text-xs text-destructive mt-1">{errors.nome.message}</p>}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><Label htmlFor="codigo">Código</Label><Input id="codigo" {...register("codigo")} /></div>
+                <div><Label htmlFor="categoria">Categoria</Label><Input id="categoria" {...register("categoria")} /></div>
+                <div><Label htmlFor="unidade">Unidade</Label><Input id="unidade" {...register("unidade")} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label htmlFor="quantidade">Quantidade</Label><Input id="quantidade" type="number" step="0.01" {...register("quantidade")} /></div>
+                <div><Label htmlFor="qtd_minima">Mínimo</Label><Input id="qtd_minima" type="number" step="0.01" {...register("qtd_minima")} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label htmlFor="preco_custo">Preço de custo</Label><Input id="preco_custo" type="number" step="0.01" {...register("preco_custo")} /></div>
+                <div><Label htmlFor="preco_venda">Preço de venda</Label><Input id="preco_venda" type="number" step="0.01" {...register("preco_venda")} /></div>
+              </div>
+              <div><Label htmlFor="fornecedor">Fornecedor</Label><Input id="fornecedor" {...register("fornecedor")} /></div>
+              <div><Label htmlFor="observacoes">Observações</Label><Textarea id="observacoes" rows={2} {...register("observacoes")} /></div>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div><Label htmlFor="codigo">Código</Label><Input id="codigo" {...register("codigo")} /></div>
-            <div><Label htmlFor="categoria">Categoria</Label><Input id="categoria" {...register("categoria")} /></div>
-            <div><Label htmlFor="unidade">Unidade</Label><Input id="unidade" {...register("unidade")} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label htmlFor="quantidade">Quantidade</Label><Input id="quantidade" type="number" step="0.01" {...register("quantidade")} /></div>
-            <div><Label htmlFor="qtd_minima">Mínimo</Label><Input id="qtd_minima" type="number" step="0.01" {...register("qtd_minima")} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label htmlFor="preco_custo">Preço de custo</Label><Input id="preco_custo" type="number" step="0.01" {...register("preco_custo")} /></div>
-            <div><Label htmlFor="preco_venda">Preço de venda</Label><Input id="preco_venda" type="number" step="0.01" {...register("preco_venda")} /></div>
-          </div>
-          <div><Label htmlFor="fornecedor">Fornecedor</Label><Input id="fornecedor" {...register("fornecedor")} /></div>
-          <div><Label htmlFor="observacoes">Observações</Label><Textarea id="observacoes" rows={2} {...register("observacoes")} /></div>
-          <DialogFooter>
+          
+          <DialogFooter className="pt-4 border-t border-border/40">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Salvando…" : "Salvar"}</Button>
+            <Button type="submit" disabled={loading || uploading}>{loading ? "Salvando…" : "Salvar"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

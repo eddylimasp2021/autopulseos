@@ -12,6 +12,7 @@ const ItemInput = z.object({
   preco_venda: z.coerce.number().min(0).max(9999999).default(0),
   fornecedor: z.string().trim().max(120).optional().nullable(),
   observacoes: z.string().trim().max(1000).optional().nullable(),
+  imagem_url: z.string().url().max(1000).optional().nullable(),
 });
 export type ItemInputType = z.infer<typeof ItemInput>;
 
@@ -45,7 +46,7 @@ export const listEstoque = createServerFn({ method: "GET" }).handler(async ({ co
   const { supabase } = context as any;
   const { data, error } = await supabase
     .from("estoque_itens")
-    .select("id,nome,codigo,categoria,unidade,quantidade,qtd_minima,preco_custo,preco_venda,fornecedor,ativo,created_at")
+    .select("id,nome,codigo,categoria,unidade,quantidade,qtd_minima,preco_custo,preco_venda,fornecedor,ativo,created_at,imagem_url")
     .eq("ativo", true)
     .order("nome", { ascending: true });
   if (error) throw new Error(error.message);
@@ -183,4 +184,27 @@ export const bulkImportEstoque = createServerFn({ method: "POST" })
       inseridos: inserted,
       atualizados: updated,
     };
+  });
+
+export const uploadProdutoImagem = createServerFn({ method: "POST" })
+  .inputValidator((d: { fileBase64: string, fileName: string, contentType: string }) => z.object({
+    fileBase64: z.string(),
+    fileName: z.string(),
+    contentType: z.string()
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    
+    // Decodifica o base64 para Buffer
+    const buffer = Buffer.from(data.fileBase64, 'base64');
+    
+    const path = `produtos/${Date.now()}_${data.fileName.replace(/[^a-zA-Z0-9.\-_]/g, '')}`;
+    const { error: uploadError } = await supabase.storage
+      .from("produtos")
+      .upload(path, buffer, { contentType: data.contentType, upsert: true });
+      
+    if (uploadError) throw new Error(uploadError.message);
+    
+    const { data: publicUrlData } = supabase.storage.from("produtos").getPublicUrl(path);
+    return { url: publicUrlData.publicUrl };
   });
