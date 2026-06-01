@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { listOrdens, createOrdem, updateOrdemStatus, deleteOrdem } from "@/lib/ordens.functions";
-import { listClientes } from "@/lib/clientes.functions";
+import { listClientes, createCliente } from "@/lib/clientes.functions";
 import { listVeiculos } from "@/lib/veiculos.functions";
 
 export const Route = createFileRoute("/_authenticated/app/ordens")({ component: Page });
@@ -190,12 +190,54 @@ function OSDialog({ open, onOpenChange, clientes, veiculos, onSubmit, loading }:
   veiculos: { id: string; cliente_id: string; placa: string; marca: string | null; modelo: string | null }[];
   onSubmit: (d: FormData) => void; loading: boolean;
 }) {
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(Schema),
     defaultValues: { cliente_id: "", veiculo_id: "", descricao: "", km_entrada: "", valor: "", desconto: "" },
   });
   const cliente_id = watch("cliente_id");
   const veiculosFiltrados = cliente_id ? veiculos.filter(v => v.cliente_id === cliente_id) : veiculos;
+
+  const qc = useQueryClient();
+  const createCli = useServerFn(createCliente);
+
+  const [showQuickCliente, setShowQuickCliente] = useState(false);
+  const [quickNome, setQuickNome] = useState("");
+  const [quickTelefone, setQuickTelefone] = useState("");
+  const [quickEmail, setQuickEmail] = useState("");
+  const [quickDocumento, setQuickDocumento] = useState("");
+  const [quickLoading, setQuickLoading] = useState(false);
+
+  const handleCreateQuickCliente = async () => {
+    if (!quickNome.trim()) {
+      toast.error("Nome do cliente é obrigatório");
+      return;
+    }
+    setQuickLoading(true);
+    try {
+      const res = await createCli({
+        data: {
+          nome: quickNome.trim(),
+          telefone: quickTelefone.trim() || undefined,
+          email: quickEmail.trim() || undefined,
+          documento: quickDocumento.trim() || undefined,
+        }
+      });
+      toast.success("Cliente criado com sucesso!");
+      await qc.invalidateQueries({ queryKey: ["clientes"] });
+      setValue("cliente_id", res.id);
+      
+      // Limpa formulário rápido
+      setQuickNome("");
+      setQuickTelefone("");
+      setQuickEmail("");
+      setQuickDocumento("");
+      setShowQuickCliente(false);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao criar cliente");
+    } finally {
+      setQuickLoading(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -203,12 +245,62 @@ function OSDialog({ open, onOpenChange, clientes, veiculos, onSubmit, loading }:
         <DialogHeader><DialogTitle>Nova OS</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit((d) => onSubmit(d))} className="space-y-3">
           <div>
-            <Label htmlFor="cliente_id">Cliente *</Label>
-            <select id="cliente_id" {...register("cliente_id")} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <div className="flex items-center justify-between mb-1">
+              <Label htmlFor="cliente_id" className="mb-0">Cliente *</Label>
+              <button
+                type="button"
+                onClick={() => setShowQuickCliente(!showQuickCliente)}
+                className="text-xs text-primary hover:underline flex items-center gap-1 font-medium transition-all"
+              >
+                <Plus className={cn("h-3 w-3 transition-transform", showQuickCliente && "rotate-45")} />
+                {showQuickCliente ? "Cancelar cadastro" : "Novo cliente"}
+              </button>
+            </div>
+
+            {showQuickCliente && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }} 
+                animate={{ height: "auto", opacity: 1 }} 
+                exit={{ height: 0, opacity: 0 }}
+                className="mb-3 overflow-hidden p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3"
+              >
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-primary">Cadastro Rápido de Cliente</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <Label htmlFor="quick_nome" className="text-xs">Nome *</Label>
+                    <Input id="quick_nome" value={quickNome} onChange={e => setQuickNome(e.target.value)} placeholder="Nome completo" className="h-8 text-xs" />
+                  </div>
+                  <div>
+                    <Label htmlFor="quick_telefone" className="text-xs">Telefone</Label>
+                    <Input id="quick_telefone" value={quickTelefone} onChange={e => setQuickTelefone(e.target.value)} placeholder="Ex: (11) 99999-9999" className="h-8 text-xs" />
+                  </div>
+                  <div>
+                    <Label htmlFor="quick_documento" className="text-xs">CPF/CNPJ</Label>
+                    <Input id="quick_documento" value={quickDocumento} onChange={e => setQuickDocumento(e.target.value)} placeholder="Apenas números" className="h-8 text-xs" />
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="quick_email" className="text-xs">Email</Label>
+                    <Input id="quick_email" type="email" value={quickEmail} onChange={e => setQuickEmail(e.target.value)} placeholder="email@exemplo.com" className="h-8 text-xs" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setShowQuickCliente(false)} className="h-7 text-xs">Cancelar</Button>
+                  <Button type="button" size="sm" onClick={handleCreateQuickCliente} disabled={quickLoading} className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
+                    {quickLoading ? "Salvando..." : "Salvar Cliente"}
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            <select 
+              id="cliente_id" 
+              {...register("cliente_id")} 
+              className={cn("w-full rounded-md border border-input bg-background px-3 py-2 text-sm", showQuickCliente && "hidden")}
+            >
               <option value="">— selecione —</option>
               {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
-            {errors.cliente_id && <p className="text-xs text-destructive mt-1">{errors.cliente_id.message}</p>}
+            {!showQuickCliente && errors.cliente_id && <p className="text-xs text-destructive mt-1">{errors.cliente_id.message}</p>}
           </div>
           <div>
             <Label htmlFor="veiculo_id">Veículo *</Label>

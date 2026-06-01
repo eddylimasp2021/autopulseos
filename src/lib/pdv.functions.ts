@@ -16,6 +16,7 @@ const FinalizarInput = z.object({
     valor: z.coerce.number().min(0)
   })).min(1),
   valor_recebido: z.coerce.number().min(0).max(99999999).optional().nullable(),
+  desconto: z.coerce.number().min(0).max(99999999).optional().nullable(),
   observacao: z.string().trim().max(500).optional().nullable(),
   itens: z.array(Item).min(1).max(200),
 });

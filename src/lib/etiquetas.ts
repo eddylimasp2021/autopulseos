@@ -17,7 +17,7 @@ export interface EtiquetaItem {
 }
 
 export function imprimirEtiquetas(itens: EtiquetaItem[], layout: EtiquetaLayout) {
-  const brl = (n: number) => \`R$ \${n.toFixed(2).replace(".", ",")}\`;
+  const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
   
   // Expandir os itens pela quantidade desejada
   const etiquetas: EtiquetaItem[] = [];
@@ -30,7 +30,7 @@ export function imprimirEtiquetas(itens: EtiquetaItem[], layout: EtiquetaLayout)
 
   if (layout === "A4_Pimaco") {
     // Layout estilo folha A4 com etiquetas de aprox 63x31mm (3 colunas, várias linhas)
-    css = \`
+    css = `
       body { margin: 0; padding: 10mm 4mm; font-family: sans-serif; }
       .page { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2mm; justify-content: center; }
       .label { 
@@ -49,14 +49,14 @@ export function imprimirEtiquetas(itens: EtiquetaItem[], layout: EtiquetaLayout)
         body { padding: 12mm 4mm; }
         .label { border: none; } 
       }
-    \`;
-    bodyContent = \`<div class="page">\` + etiquetas.map(e => \`
+    `;
+    bodyContent = `<div class="page">` + etiquetas.map(e => `
       <div class="label">
-        <div class="name">\${e.nome}</div>
-        <div class="price">\${brl(e.preco)}</div>
+        <div class="name">${e.nome}</div>
+        <div class="price">${brl(e.preco)}</div>
         <div class="barcode-container">
            <svg class="barcode" 
-                jsbarcode-value="\${e.codigo}" 
+                jsbarcode-value="${e.codigo}" 
                 jsbarcode-format="CODE128" 
                 jsbarcode-displayvalue="true" 
                 jsbarcode-fontsize="12"
@@ -66,11 +66,11 @@ export function imprimirEtiquetas(itens: EtiquetaItem[], layout: EtiquetaLayout)
            </svg>
         </div>
       </div>
-    \`).join('') + \`</div>\`;
+    `).join('') + `</div>`;
 
   } else if (layout === "Argox_40x20") {
     // Bobina contínua pequena
-    css = \`
+    css = `
       body { margin: 0; padding: 0; font-family: sans-serif; background: #eee; }
       .label { 
         width: 40mm; height: 20mm; 
@@ -88,19 +88,19 @@ export function imprimirEtiquetas(itens: EtiquetaItem[], layout: EtiquetaLayout)
         @page { margin: 0; size: 40mm 20mm; } 
         body { background: #fff; }
       }
-    \`;
-    bodyContent = etiquetas.map(e => \`
+    `;
+    bodyContent = etiquetas.map(e => `
       <div class="label">
-        <div class="name">\${e.nome}</div>
-        <div class="price">\${brl(e.preco)}</div>
+        <div class="name">${e.nome}</div>
+        <div class="price">${brl(e.preco)}</div>
         <div class="barcode-container">
-           <svg class="barcode" jsbarcode-value="\${e.codigo}" jsbarcode-format="CODE128" jsbarcode-displayvalue="true" jsbarcode-fontsize="10" jsbarcode-height="25" jsbarcode-width="1" jsbarcode-margin="0"></svg>
+           <svg class="barcode" jsbarcode-value="${e.codigo}" jsbarcode-format="CODE128" jsbarcode-displayvalue="true" jsbarcode-fontsize="10" jsbarcode-height="25" jsbarcode-width="1" jsbarcode-margin="0"></svg>
         </div>
       </div>
-    \`).join('');
+    `).join('');
 
   } else if (layout === "Termica_80mm") {
-    css = \`
+    css = `
       body { margin: 0 auto; width: 78mm; padding: 5px; font-family: sans-serif; }
       .label { 
         border-bottom: 1px dashed #000;
@@ -112,29 +112,29 @@ export function imprimirEtiquetas(itens: EtiquetaItem[], layout: EtiquetaLayout)
       .price { font-size: 18px; font-weight: 900; margin-bottom: 5px; }
       .barcode-container svg { height: 18mm; max-width: 100%; }
       @media print { @page { margin: 0; } body { padding: 2mm; width: 100%; } }
-    \`;
-    bodyContent = etiquetas.map(e => \`
+    `;
+    bodyContent = etiquetas.map(e => `
       <div class="label">
-        <div class="name">\${e.nome}</div>
-        <div class="price">\${brl(e.preco)}</div>
+        <div class="name">${e.nome}</div>
+        <div class="price">${brl(e.preco)}</div>
         <div class="barcode-container">
-           <svg class="barcode" jsbarcode-value="\${e.codigo}" jsbarcode-format="CODE128" jsbarcode-displayvalue="true" jsbarcode-fontsize="14" jsbarcode-height="40" jsbarcode-width="1.8" jsbarcode-margin="0"></svg>
+           <svg class="barcode" jsbarcode-value="${e.codigo}" jsbarcode-format="CODE128" jsbarcode-displayvalue="true" jsbarcode-fontsize="14" jsbarcode-height="40" jsbarcode-width="1.8" jsbarcode-margin="0"></svg>
         </div>
       </div>
-    \`).join('');
+    `).join('');
   }
 
-  const html = \`
+  const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
       <title>Impressão de Etiquetas</title>
       <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-      <style>\${css}</style>
+      <style>${css}</style>
     </head>
     <body>
-      \${bodyContent}
+      ${bodyContent}
       <script>
         window.onload = function() { 
           JsBarcode(".barcode").init();
@@ -143,6 +143,6 @@ export function imprimirEtiquetas(itens: EtiquetaItem[], layout: EtiquetaLayout)
       </script>
     </body>
     </html>
-  \`;
+  `;
   openPrintWindow(html);
 }

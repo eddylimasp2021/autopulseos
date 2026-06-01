@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileSpreadsheet, Check } from "lucide-react";
 import Papa from "papaparse";
-import Papa from "papaparse";
 import { listEstoque, createEstoqueItem, updateEstoqueItem, deleteEstoqueItem, createMovimentacao, bulkImportEstoque, uploadProdutoImagem } from "@/lib/estoque.functions";
 import { imprimirEtiquetas, EtiquetaLayout, EtiquetaItem } from "@/lib/etiquetas";
 
@@ -33,13 +32,12 @@ const Schema = z.object({
   preco_custo: z.string().optional(),
   preco_venda: z.string().optional(),
   fornecedor: z.string().trim().max(120).optional(),
-  fornecedor: z.string().trim().max(120).optional(),
   observacoes: z.string().trim().max(1000).optional(),
   imagem_url: z.string().url().optional().nullable().or(z.literal("")),
 });
 type FormData = z.infer<typeof Schema>;
 
-type Item = { id: string; nome: string; codigo: string | null; categoria: string | null; unidade: string | null; quantidade: number; qtd_minima: number; preco_custo: number; preco_venda: number; fornecedor: string | null; imagem_url: string | null };
+type Item = { id: string; nome: string; codigo: string | null; categoria: string | null; unidade: string | null; quantidade: number; qtd_minima: number; preco_custo: number; preco_venda: number; fornecedor: string | null; observacoes: string | null; imagem_url: string | null };
 
 function Page() {
   const [busca, setBusca] = useState("");
