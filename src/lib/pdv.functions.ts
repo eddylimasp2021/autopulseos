@@ -168,3 +168,43 @@ export const fecharCaixa = createServerFn({ method: "POST" })
       resumo: { dinheiro: totalDinheiro, pix: totalPix, credito: totalCredito, debito: totalDebito, total_vendas: totalGeral }
     };
   });
+
+export const getResumoCaixa = createServerFn({ method: "POST" })
+  .inputValidator((d: any) => FecharCaixaInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    
+    // Obter caixa
+    const { data: caixa, error: errCaixa } = await supabase
+      .from("pdv_caixas")
+      .select("saldo_abertura")
+      .eq("id", data.caixa_id)
+      .single();
+    if (errCaixa) throw new Error(errCaixa.message);
+
+    const { data: lancamentos, error: errLanc } = await supabase
+      .from("financeiro_lancamentos")
+      .select("valor, forma_pagamento")
+      .eq("caixa_id", data.caixa_id);
+    if (errLanc) throw new Error(errLanc.message);
+
+    let totalDinheiro = 0, totalPix = 0, totalCredito = 0, totalDebito = 0;
+    for (const l of (lancamentos || [])) {
+      if (l.forma_pagamento === "dinheiro") totalDinheiro += Number(l.valor);
+      else if (l.forma_pagamento === "pix") totalPix += Number(l.valor);
+      else if (l.forma_pagamento === "cartao_debito") totalDebito += Number(l.valor);
+      else totalCredito += Number(l.valor);
+    }
+    
+    const totalVendas = totalDinheiro + totalPix + totalCredito + totalDebito;
+    
+    return {
+      saldo_abertura: Number(caixa.saldo_abertura),
+      dinheiro: totalDinheiro,
+      pix: totalPix,
+      credito: totalCredito,
+      debito: totalDebito,
+      total_vendas: totalVendas,
+      total_geral: totalVendas + Number(caixa.saldo_abertura)
+    };
+  });

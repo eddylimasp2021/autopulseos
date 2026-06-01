@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet, LogOut, Keyboard } from "lucide-react";
+import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet, LogOut, Keyboard, Loader2 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { listEstoqueParaPDV, finalizarVenda, verificarCaixaAberto, abrirCaixa, fecharCaixa } from "@/lib/pdv.functions";
+import { listEstoqueParaPDV, finalizarVenda, verificarCaixaAberto, abrirCaixa, fecharCaixa, getResumoCaixa } from "@/lib/pdv.functions";
 import { listClientes } from "@/lib/clientes.functions";
 import { listOrdens, getOrdem, updateOrdemStatus } from "@/lib/ordens.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -56,6 +56,7 @@ function Page() {
   const vCaixa = useServerFn(verificarCaixaAberto);
   const mAbrirCaixa = useServerFn(abrirCaixa);
   const mFecharCaixa = useServerFn(fecharCaixa);
+  const getResumoFn = useServerFn(getResumoCaixa);
 
   const { data: produtos = [] } = useQuery({ queryKey: ["pdv-estoque"], queryFn: () => listEst() });
   const { data: clientes = [] } = useQuery({ queryKey: ["clientes"], queryFn: () => listCli() });
@@ -64,6 +65,12 @@ function Page() {
 
   const [saldoAbertura, setSaldoAbertura] = useState("");
   const [modalFechamento, setModalFechamento] = useState(false);
+
+  const { data: resumoCaixa, isLoading: loadingResumo } = useQuery({
+    queryKey: ["pdv-caixa-resumo", caixaAtual?.id],
+    queryFn: () => getResumoFn({ data: { caixa_id: caixaAtual?.id! } }),
+    enabled: !!caixaAtual?.id && modalFechamento
+  });
 
   const categorias = Array.from(new Set((produtos as Produto[]).map(p => p.categoria).filter(Boolean) as string[]));
   const catalogo = (produtos as Produto[]).filter(p => {
@@ -340,12 +347,54 @@ function Page() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass w-full max-w-md rounded-3xl p-6 shadow-2xl border border-border/60">
             <h2 className="text-xl font-display font-bold mb-3 flex items-center gap-2"><LogOut className="h-5 w-5 text-amber-500" /> Fechar Caixa</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              O caixa atual será fechado. As vendas do dia serão totalizadas e o comprovante de fechamento será impresso automaticamente. Deseja continuar?
+            <p className="text-xs text-muted-foreground mb-4">
+              O caixa atual será fechado. As vendas do dia serão totalizadas e o comprovante de fechamento será impresso automaticamente.
             </p>
+
+            {loadingResumo ? (
+              <div className="flex flex-col items-center justify-center py-6 text-xs text-muted-foreground gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span>Calculando valores do caixa...</span>
+              </div>
+            ) : resumoCaixa ? (
+              <div className="bg-secondary/35 rounded-2xl p-4 border border-border/40 mb-6 space-y-2.5 text-sm">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Resumo do Período (Antes de Fechar)</div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground">Saldo de Abertura:</span>
+                  <span className="font-semibold tabular-nums">{resumoCaixa.saldo_abertura.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                </div>
+                <div className="h-px bg-border/40 my-1"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-xs flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5 text-amber-500" /> Dinheiro:</span>
+                  <span className="font-bold tabular-nums">{resumoCaixa.dinheiro.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-xs flex items-center gap-1.5"><QrCode className="h-3.5 w-3.5 text-sky-400" /> PIX:</span>
+                  <span className="font-bold tabular-nums">{resumoCaixa.pix.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-xs flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5 text-indigo-400" /> Cartão Crédito:</span>
+                  <span className="font-bold tabular-nums">{resumoCaixa.credito.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-xs flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 text-teal-400" /> Cartão Débito:</span>
+                  <span className="font-bold tabular-nums">{resumoCaixa.debito.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                </div>
+                <div className="h-px bg-border/40 my-1"></div>
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-xs">Total de Vendas:</span>
+                  <span className="font-bold text-primary tabular-nums">{resumoCaixa.total_vendas.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                </div>
+                <div className="flex justify-between items-center bg-secondary/60 p-2 rounded-xl border border-border/20 mt-2">
+                  <span className="font-bold text-xs">Saldo em Caixa (Dinheiro + Abertura):</span>
+                  <span className="font-extrabold text-foreground tabular-nums">{(resumoCaixa.dinheiro + resumoCaixa.saldo_abertura).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex gap-3 justify-end">
               <button onClick={() => setModalFechamento(false)} className="px-4 py-2.5 text-sm font-medium rounded-xl border border-border/60 hover:bg-secondary/80 transition">Cancelar</button>
-              <button onClick={() => mFechar.mutate()} disabled={mFechar.isPending} className="px-5 py-2.5 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-50 flex items-center gap-2">
+              <button onClick={() => mFechar.mutate()} disabled={mFechar.isPending || loadingResumo} className="px-5 py-2.5 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-50 flex items-center gap-2">
                 {mFechar.isPending ? "Calculando..." : "Confirmar Fechamento"}
               </button>
             </div>
