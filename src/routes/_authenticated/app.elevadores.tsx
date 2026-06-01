@@ -1,0 +1,535 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { motion, AnimatePresence } from "framer-motion";
+import { Wrench, Plus, Trash2, User, Car, Check, Play, ShoppingCart, Loader2, ArrowRightLeft, DollarSign } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+import { listOrdens, getOrdem, createOrdem, updateOrdemStatus, updateOrdemElevador, addOSItem, removeOSItem } from "@/lib/ordens.functions";
+import { listClientes } from "@/lib/clientes.functions";
+import { listVeiculos } from "@/lib/veiculos.functions";
+import { listEstoque } from "@/lib/estoque.functions";
+
+export const Route = createFileRoute("/_authenticated/app/elevadores")({ component: Page });
+
+const OSDialogSchema = z.object({
+  cliente_id: z.string().uuid("Selecione o cliente"),
+  veiculo_id: z.string().uuid("Selecione o veículo"),
+  descricao: z.string().trim().max(1000).optional(),
+});
+type OSDialogData = z.infer<typeof OSDialogSchema>;
+
+const BAYS = [1, 2, 3, 4, 5, 6, 7];
+
+function Page() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [selectedBay, setSelectedBay] = useState<number | null>(null);
+  const [osDialogOpen, setOsDialogOpen] = useState(false);
+
+  // Server functions
+  const listOs = useServerFn(listOrdens);
+  const listCli = useServerFn(listClientes);
+  const listVei = useServerFn(listVeiculos);
+  const listEst = useServerFn(listEstoque);
+  
+  const createOs = useServerFn(createOrdem);
+  const updateElevador = useServerFn(updateOrdemElevador);
+  const updateStatus = useServerFn(updateOrdemStatus);
+  const addItem = useServerFn(addOSItem);
+  const removeItem = useServerFn(removeOSItem);
+
+  // Queries
+  const { data: ordens = [], isLoading: loadingOs } = useQuery({ queryKey: ["ordens"], queryFn: () => listOs() });
+  const { data: clientes = [] } = useQuery({ queryKey: ["clientes"], queryFn: () => listCli() });
+  const { data: veiculos = [] } = useQuery({ queryKey: ["veiculos"], queryFn: () => listVei() });
+  const { data: estoque = [] } = useQuery({ queryKey: ["estoque"], queryFn: () => listEst() });
+
+  // Map OSs by elevator bay (1-7)
+  const bayMap = useMemo(() => {
+    const map: Record<number, any> = {};
+    (ordens as any[]).forEach(o => {
+      if (o.elevador && o.status !== "cancelada" && o.status !== "entregue") {
+        map[o.elevador] = o;
+      }
+    });
+    return map;
+  }, [ordens]);
+
+  // Mutations
+  const mCreate = useMutation({
+    mutationFn: (d: OSDialogData & { elevador: number }) => createOs({ data: {
+      cliente_id: d.cliente_id,
+      veiculo_id: d.veiculo_id,
+      descricao: d.descricao || "Atendimento Elevador " + d.elevador,
+      elevador: d.elevador,
+      itens: []
+    } as any }),
+    onSuccess: () => {
+      toast.success("Atendimento iniciado no elevador!");
+      qc.invalidateQueries({ queryKey: ["ordens"] });
+      setOsDialogOpen(false);
+      setSelectedBay(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const mReleaseWithoutBill = useMutation({
+    mutationFn: (osId: string) => updateElevador({ data: { id: osId, elevador: null } }),
+    onSuccess: () => {
+      toast.success("Veículo liberado do elevador (OS continua ativa para faturamento)");
+      qc.invalidateQueries({ queryKey: ["ordens"] });
+    },
+    onError: (e: Error) => toast.error(e.message)
+  });
+
+  const mReleaseToPDV = useMutation({
+    mutationFn: async (osId: string) => {
+      // 1. Atualiza status para concluída
+      await updateStatus({ data: { id: osId, status: "concluida" } });
+      // 2. Tira do elevador
+      await updateElevador({ data: { id: osId, elevador: null } });
+    },
+    onSuccess: () => {
+      toast.success("OS concluída e enviada ao PDV para faturamento!");
+      qc.invalidateQueries({ queryKey: ["ordens"] });
+      // Navegar para o PDV
+      navigate({ to: "/app/pdv" });
+    },
+    onError: (e: Error) => toast.error(e.message)
+  });
+
+  function startAtendimento(bay: number) {
+    setSelectedBay(bay);
+    setOsDialogOpen(true);
+  }
+
+  return (
+    <div className="space-y-6">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4">
+        <div className="grid h-12 w-12 place-items-center rounded-xl bg-[image:var(--gradient-neon)] neon-border">
+          <Wrench className="h-5 w-5 text-neon-foreground" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Painel de Elevadores</h1>
+          <p className="text-sm text-muted-foreground mt-1">Gerencie os boxes de atendimento e adicione produtos em tempo real.</p>
+        </div>
+      </motion.div>
+
+      {loadingOs ? (
+        <div className="p-20 text-center text-muted-foreground text-sm flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span>Carregando painel de controle...</span>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {BAYS.map((bayNum) => {
+            const activeOS = bayMap[bayNum];
+            return (
+              <BayCard
+                key={bayNum}
+                bayNum={bayNum}
+                os={activeOS}
+                onStart={() => startAtendimento(bayNum)}
+                onReleaseWithoutBill={(id) => mReleaseWithoutBill.mutate(id)}
+                onReleaseToPDV={(id) => mReleaseToPDV.mutate(id)}
+                estoque={estoque as any[]}
+                onReload={() => qc.invalidateQueries({ queryKey: ["ordens"] })}
+                addItemFn={addItem}
+                removeItemFn={removeItem}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      <StartOSDialog
+        open={osDialogOpen}
+        onOpenChange={(v) => { setOsDialogOpen(v); if(!v) setSelectedBay(null); }}
+        bay={selectedBay}
+        clientes={clientes as any[]}
+        veiculos={veiculos as any[]}
+        onSubmit={(d) => mCreate.mutate({ ...d, elevador: selectedBay! })}
+        loading={mCreate.isPending}
+      />
+    </div>
+  );
+}
+
+function BayCard({
+  bayNum,
+  os,
+  onStart,
+  onReleaseWithoutBill,
+  onReleaseToPDV,
+  estoque,
+  onReload,
+  addItemFn,
+  removeItemFn,
+}: {
+  bayNum: number;
+  os: any;
+  onStart: () => void;
+  onReleaseWithoutBill: (osId: string) => void;
+  onReleaseToPDV: (osId: string) => void;
+  estoque: any[];
+  onReload: () => void;
+  addItemFn: any;
+  removeItemFn: any;
+}) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [searchVal, setSearchVal] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [itemQtd, setItemQtd] = useState("1");
+  const [loadingAction, setLoadingAction] = useState(false);
+
+  const getOrdemFn = useServerFn(getOrdem);
+
+  // Fetch items for this OS
+  const { data: osDetails, refetch: refetchDetails } = useQuery({
+    queryKey: ["os-details", os?.id],
+    queryFn: async () => {
+      if (!os?.id) return null;
+      const getOs = await getOrdemFn({ data: { id: os.id } });
+      return getOs;
+    },
+    enabled: !!os?.id
+  });
+
+  const catalogOptions = useMemo(() => {
+    const q = searchVal.toLowerCase().trim();
+    if (!q) return [];
+    return estoque.filter(p => p.nome.toLowerCase().includes(q) || (p.codigo ?? "").toLowerCase().includes(q)).slice(0, 5);
+  }, [estoque, searchVal]);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!os?.id) return;
+    
+    let desc = searchVal.trim();
+    let price = 0;
+    let estoqueId = null;
+    let tipo: "servico" | "peca" = "servico";
+
+    if (selectedProduct) {
+      desc = selectedProduct.nome;
+      price = Number(selectedProduct.preco_venda);
+      estoqueId = selectedProduct.id;
+      tipo = "peca";
+    }
+
+    if (!desc) {
+      toast.error("Informe a descrição ou selecione um produto");
+      return;
+    }
+
+    setLoadingAction(true);
+    try {
+      await addItemFn({
+        os_id: os.id,
+        tipo,
+        descricao: desc,
+        quantidade: Number(itemQtd) || 1,
+        valor_unit: price,
+        estoque_item_id: estoqueId
+      });
+      toast.success("Item adicionado");
+      refetchDetails();
+      onReload();
+      
+      // Reset form
+      setSearchVal("");
+      setSelectedProduct(null);
+      setItemQtd("1");
+      setShowAddForm(false);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao adicionar item");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    if (!os?.id) return;
+    if (!confirm("Remover este item?")) return;
+    setLoadingAction(true);
+    try {
+      await removeItemFn({ id: itemId, os_id: os.id });
+      toast.success("Item removido");
+      refetchDetails();
+      onReload();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao remover item");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const formattedTotal = useMemo(() => {
+    const total = osDetails?.valor_total || os?.valor_total || 0;
+    return Number(total).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }, [osDetails, os]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "glass rounded-2xl p-5 border flex flex-col justify-between transition-all",
+        os ? "border-primary/20 shadow-[0_0_20px_-10px_oklch(0.65_0.18_240/0.3)] bg-primary/5" : "border-border/60"
+      )}
+    >
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <span className={cn(
+            "text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border",
+            os ? "bg-primary/10 text-primary border-primary/20" : "bg-secondary text-muted-foreground border-border/40"
+          )}>
+            Elevador {bayNum}
+          </span>
+          <span className="text-xs text-muted-foreground font-mono">
+            {os ? `OS #${os.numero}` : "Livre"}
+          </span>
+        </div>
+
+        {!os ? (
+          <div className="py-8 text-center flex flex-col items-center justify-center">
+            <div className="h-12 w-12 rounded-full bg-secondary flex items-center justify-center mb-3">
+              <Play className="h-5 w-5 text-muted-foreground/60" />
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">Box disponível para atendimento</p>
+            <Button size="sm" onClick={onStart} className="gap-2">
+              <Plus className="h-4 w-4" /> Iniciar OS
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 font-medium text-sm">
+                <User className="h-3.5 w-3.5 text-muted-foreground" /> {os.clientes?.nome}
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Car className="h-3.5 w-3.5" /> {[os.veiculos?.marca, os.veiculos?.modelo].filter(Boolean).join(" ")} · {os.veiculos?.placa}
+              </div>
+            </div>
+
+            <div className="border-t border-border/40 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Peças & Serviços</span>
+                <button
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
+                >
+                  <Plus className="h-3 w-3" /> Adicionar
+                </button>
+              </div>
+
+              {showAddForm && (
+                <form onSubmit={handleAdd} className="bg-secondary/40 p-3 rounded-xl border border-border/60 mb-3 space-y-2 relative">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">Buscar Produto ou Digitar Serviço</Label>
+                    <Input
+                      value={searchVal}
+                      onChange={e => { setSearchVal(e.target.value); setSelectedProduct(null); }}
+                      placeholder="Ex: Óleo 5W30 ou Alinhamento"
+                      className="h-8 text-xs bg-background"
+                      autoFocus
+                    />
+                    {catalogOptions.length > 0 && (
+                      <div className="absolute left-3 right-3 bg-popover border border-border rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto text-xs mt-1 divide-y divide-border">
+                        {catalogOptions.map(p => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedProduct(p);
+                              setSearchVal(p.nome);
+                            }}
+                            className="w-full text-left p-2.5 hover:bg-secondary/80 transition flex justify-between"
+                          >
+                            <span>{p.nome}</span>
+                            <span className="font-semibold text-primary">{Number(p.preco_venda).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {selectedProduct && (
+                    <div className="text-[10px] text-emerald-500 font-semibold flex items-center gap-1">
+                      <Check className="h-3 w-3" /> Produto do estoque selecionado ({Number(selectedProduct.preco_venda).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Label className="text-[10px] text-muted-foreground">Qtd</Label>
+                      <Input
+                        type="number"
+                        min="0.1"
+                        step="any"
+                        value={itemQtd}
+                        onChange={e => setItemQtd(e.target.value)}
+                        className="h-8 text-xs bg-background"
+                      />
+                    </div>
+                    {!selectedProduct && (
+                      <div className="flex-[2]">
+                        <Label className="text-[10px] text-muted-foreground">Preço Unit. (R$)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0,00"
+                          defaultValue="0"
+                          onChange={e => {
+                            const val = Number(e.target.value) || 0;
+                            // Se for custom, lidamos no handleAdd
+                          }}
+                          id="custom_price"
+                          className="h-8 text-xs bg-background"
+                        />
+                      </div>
+                    )}
+                    <Button type="submit" size="sm" className="h-8 px-3" disabled={loadingAction}>
+                      Add
+                    </Button>
+                  </div>
+                </form>
+              )}
+
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 styled-scrollbar">
+                {osDetails?.itens?.map((it: any) => (
+                  <div key={it.id} className="flex items-center justify-between text-xs bg-secondary/20 p-2 rounded-lg hover:bg-secondary/40 transition">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{it.descricao}</div>
+                      <div className="text-[10px] text-muted-foreground tabular-nums">
+                        {Number(it.valor_unit).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} × {Number(it.quantidade)}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold tabular-nums">
+                        {(Number(it.quantidade) * Number(it.valor_unit)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveItem(it.id)}
+                        disabled={loadingAction}
+                        className="text-destructive hover:bg-destructive/15 p-1 rounded transition"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {(!osDetails?.itens || osDetails.itens.length === 0) && (
+                  <div className="text-center py-4 text-xs text-muted-foreground">Nenhum item adicionado ao carro ainda.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-border/40 pt-3 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Acumulado</span>
+              <span className="font-display text-lg font-bold tabular-nums text-primary">{formattedTotal}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {os && (
+        <div className="grid grid-cols-2 gap-2 mt-5 border-t border-border/40 pt-4">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onReleaseWithoutBill(os.id)}
+            className="text-xs gap-1.5 h-9"
+            title="Libera o elevador mas mantém a OS aberta para faturar depois"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" /> Tirar Box
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => onReleaseToPDV(os.id)}
+            className="text-xs gap-1.5 h-9 bg-emerald-500 hover:bg-emerald-600 text-white"
+            title="Conclui a OS e abre o PDV para cobrança"
+          >
+            <DollarSign className="h-3.5 w-3.5" /> Enviar ao PDV
+          </Button>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+function StartOSDialog({ open, onOpenChange, bay, clientes, veiculos, onSubmit, loading }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  bay: number | null;
+  clientes: { id: string; nome: string }[];
+  veiculos: { id: string; cliente_id: string; placa: string; marca: string | null; modelo: string | null }[];
+  onSubmit: (d: OSDialogData) => void;
+  loading: boolean;
+}) {
+  const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<OSDialogData>({
+    resolver: zodResolver(OSDialogSchema),
+    defaultValues: { cliente_id: "", veiculo_id: "", descricao: "" },
+  });
+
+  const cliId = watch("cliente_id");
+  const filteredVehicles = useMemo(() => {
+    return veiculos.filter(v => !cliId || v.cliente_id === cliId);
+  }, [veiculos, cliId]);
+
+  const handleClose = (v: boolean) => {
+    if (!v) reset();
+    onOpenChange(v);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Iniciar Atendimento — Elevador {bay}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-2">
+          <div>
+            <Label htmlFor="os_cliente_id">Cliente *</Label>
+            <select id="os_cliente_id" {...register("cliente_id")} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+              <option value="">Selecione…</option>
+              {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            {errors.cliente_id && <p className="text-xs text-destructive mt-1">{errors.cliente_id.message}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="os_veiculo_id">Veículo *</Label>
+            <select id="os_veiculo_id" {...register("veiculo_id")} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1">
+              <option value="">Selecione…</option>
+              {filteredVehicles.map(v => <option key={v.id} value={v.id}>{v.placa} — {v.marca ?? ""} {v.modelo ?? ""}</option>)}
+            </select>
+            {errors.veiculo_id && <p className="text-xs text-destructive mt-1">{errors.veiculo_id.message}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="os_desc">Observação Inicial</Label>
+            <Input id="os_desc" {...register("descricao")} placeholder="Ex: Troca de óleo de filtros padrão" className="mt-1" />
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Cancelar</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Iniciando..." : "Confirmar e Iniciar"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

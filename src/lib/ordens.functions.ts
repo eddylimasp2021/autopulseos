@@ -19,6 +19,7 @@ const OSInput = z.object({
   km_entrada: z.coerce.number().int().min(0).max(9999999).optional().nullable(),
   desconto: z.coerce.number().min(0).max(9999999).default(0),
   itens: z.array(ItemInput).default([]),
+  elevador: z.number().int().min(1).max(7).optional().nullable(),
 });
 export type OSInputType = z.infer<typeof OSInput>;
 
@@ -26,7 +27,7 @@ export const listOrdens = createServerFn({ method: "GET" }).handler(async ({ con
   const { supabase } = context as any;
   const { data, error } = await supabase
     .from("ordens_servico")
-    .select(`id,numero,status,descricao,valor_total,desconto,data_abertura,data_conclusao,
+    .select(`id,numero,status,descricao,valor_total,desconto,data_abertura,data_conclusao,elevador,
              clientes(nome,telefone),veiculos(placa,marca,modelo)`)
     .order("data_abertura", { ascending: false });
   if (error) throw new Error(error.message);
@@ -63,7 +64,8 @@ export const createOrdem = createServerFn({ method: "POST" })
         km_entrada: data.km_entrada ?? null,
         desconto: data.desconto ?? 0,
         valor_total,
-        status: "aberta",
+        status: data.elevador ? "em_andamento" : "aberta",
+        elevador: data.elevador ?? null,
       })
       .select()
       .single();
@@ -108,4 +110,150 @@ export const deleteOrdem = createServerFn({ method: "POST" })
     const { error } = await supabase.from("ordens_servico").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+export const updateOrdemElevador = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; elevador: number | null }) =>
+    z.object({ id: z.string().uuid(), elevador: z.number().int().min(1).max(7).nullable() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    const { data: row, error } = await supabase
+      .from("ordens_servico")
+      .update({ 
+        elevador: data.elevador,
+        status: data.elevador ? "em_andamento" : "aberta"
+      })
+      .eq("id", data.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const addOSItem = createServerFn({ method: "POST" })
+  .inputValidator((d: {
+    os_id: string;
+    tipo: "servico" | "peca";
+    descricao: string;
+    quantidade: number;
+    valor_unit: number;
+    estoque_item_id?: string | null;
+  }) => z.object({
+    os_id: z.string().uuid(),
+    tipo: z.enum(["servico", "peca"]),
+    descricao: z.string().trim().min(1).max(200),
+    quantidade: z.coerce.number().positive(),
+    valor_unit: z.coerce.number().min(0),
+    estoque_item_id: z.string().uuid().optional().nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    
+    // 1. Insere o item
+    const { data: item, error: errInsert } = await supabase
+      .from("os_itens")
+      .insert({
+        os_id: data.os_id,
+        tipo: data.tipo,
+        descricao: data.descricao,
+        quantidade: data.quantidade,
+        valor_unit: data.valor_unit,
+        estoque_item_id: data.estoque_item_id || null,
+      })
+      .select()
+      .single();
+      
+    if (errInsert) throw new Error(errInsert.message);
+    
+    // 2. Recalcula o valor total da OS
+    const { data: itens, error: errFetch } = await supabase
+      .from("os_itens")
+      .select("quantidade,valor_unit")
+      .eq("os_id", data.os_id);
+      
+    if (errFetch) throw new Error(errFetch.message);
+    
+    const valor_total = (itens ?? []).reduce((s: number, it: any) => s + Number(it.quantidade) * Number(it.valor_unit), 0);
+    
+    const { error: errUpdate } = await supabase
+      .from("ordens_servico")
+      .update({ valor_total })
+      .eq("id", data.os_id);
+      
+    if (errUpdate) throw new Error(errUpdate.message);
+    
+    return item;
+  });
+
+export const removeOSItem = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; os_id: string }) =>
+    z.object({ id: z.string().uuid(), os_id: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    
+    // 1. Deleta o item
+    const { error: errDelete } = await supabase
+      .from("os_itens")
+      .delete()
+      .eq("id", data.id);
+      
+    if (errDelete) throw new Error(errDelete.message);
+    
+    // 2. Recalcula o valor total da OS
+    const { data: itens, error: errFetch } = await supabase
+      .from("os_itens")
+      .select("quantidade,valor_unit")
+      .eq("os_id", data.os_id);
+      
+    if (errFetch) throw new Error(errFetch.message);
+    
+    const valor_total = (itens ?? []).reduce((s: number, it: any) => s + Number(it.quantidade) * Number(it.valor_unit), 0);
+    
+    const { error: errUpdate } = await supabase
+      .from("ordens_servico")
+      .update({ valor_total })
+      .eq("id", data.os_id);
+      
+    if (errUpdate) throw new Error(errUpdate.message);
+    
+    return { ok: true };
+  });
+
+export const updateOSItem = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; os_id: string; quantidade: number }) =>
+    z.object({ id: z.string().uuid(), os_id: z.string().uuid(), quantidade: z.coerce.number().positive() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    
+    // 1. Atualiza o item
+    const { data: item, error: errUpdateItem } = await supabase
+      .from("os_itens")
+      .update({ quantidade: data.quantidade })
+      .eq("id", data.id)
+      .select()
+      .single();
+      
+    if (errUpdateItem) throw new Error(errUpdateItem.message);
+    
+    // 2. Recalcula o valor total da OS
+    const { data: itens, error: errFetch } = await supabase
+      .from("os_itens")
+      .select("quantidade,valor_unit")
+      .eq("os_id", data.os_id);
+      
+    if (errFetch) throw new Error(errFetch.message);
+    
+    const valor_total = (itens ?? []).reduce((s: number, it: any) => s + Number(it.quantidade) * Number(it.valor_unit), 0);
+    
+    const { error: errUpdate } = await supabase
+      .from("ordens_servico")
+      .update({ valor_total })
+      .eq("id", data.os_id);
+      
+    if (errUpdate) throw new Error(errUpdate.message);
+    
+    return item;
   });

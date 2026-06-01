@@ -22,6 +22,7 @@ import { Route as AuthenticatedAppPdvRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedAppOrdensRouteImport } from './routes/_authenticated/app.ordens'
 import { Route as AuthenticatedAppFinanceiroRouteImport } from './routes/_authenticated/app.financeiro'
 import { Route as AuthenticatedAppEstoqueRouteImport } from './routes/_authenticated/app.estoque'
+import { Route as AuthenticatedAppElevadoresRouteImport } from './routes/_authenticated/app.elevadores'
 import { Route as AuthenticatedAppConfiguracoesRouteImport } from './routes/_authenticated/app.configuracoes'
 import { Route as AuthenticatedAppClientesRouteImport } from './routes/_authenticated/app.clientes'
 import { Route as AuthenticatedAppAgendaRouteImport } from './routes/_authenticated/app.agenda'
@@ -97,6 +98,12 @@ const AuthenticatedAppEstoqueRoute = AuthenticatedAppEstoqueRouteImport.update({
   path: '/estoque',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppElevadoresRoute =
+  AuthenticatedAppElevadoresRouteImport.update({
+    id: '/elevadores',
+    path: '/elevadores',
+    getParentRoute: () => AuthenticatedAppRoute,
+  } as any)
 const AuthenticatedAppConfiguracoesRoute =
   AuthenticatedAppConfiguracoesRouteImport.update({
     id: '/configuracoes',
@@ -134,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/app/agenda': typeof AuthenticatedAppAgendaRoute
   '/app/clientes': typeof AuthenticatedAppClientesRoute
   '/app/configuracoes': typeof AuthenticatedAppConfiguracoesRoute
+  '/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
   '/app/ordens': typeof AuthenticatedAppOrdensRoute
@@ -152,6 +160,7 @@ export interface FileRoutesByTo {
   '/app/agenda': typeof AuthenticatedAppAgendaRoute
   '/app/clientes': typeof AuthenticatedAppClientesRoute
   '/app/configuracoes': typeof AuthenticatedAppConfiguracoesRoute
+  '/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
   '/app/ordens': typeof AuthenticatedAppOrdensRoute
@@ -173,6 +182,7 @@ export interface FileRoutesById {
   '/_authenticated/app/agenda': typeof AuthenticatedAppAgendaRoute
   '/_authenticated/app/clientes': typeof AuthenticatedAppClientesRoute
   '/_authenticated/app/configuracoes': typeof AuthenticatedAppConfiguracoesRoute
+  '/_authenticated/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/_authenticated/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/_authenticated/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
   '/_authenticated/app/ordens': typeof AuthenticatedAppOrdensRoute
@@ -194,6 +204,7 @@ export interface FileRouteTypes {
     | '/app/agenda'
     | '/app/clientes'
     | '/app/configuracoes'
+    | '/app/elevadores'
     | '/app/estoque'
     | '/app/financeiro'
     | '/app/ordens'
@@ -212,6 +223,7 @@ export interface FileRouteTypes {
     | '/app/agenda'
     | '/app/clientes'
     | '/app/configuracoes'
+    | '/app/elevadores'
     | '/app/estoque'
     | '/app/financeiro'
     | '/app/ordens'
@@ -232,6 +244,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/agenda'
     | '/_authenticated/app/clientes'
     | '/_authenticated/app/configuracoes'
+    | '/_authenticated/app/elevadores'
     | '/_authenticated/app/estoque'
     | '/_authenticated/app/financeiro'
     | '/_authenticated/app/ordens'
@@ -346,6 +359,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppEstoqueRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/elevadores': {
+      id: '/_authenticated/app/elevadores'
+      path: '/elevadores'
+      fullPath: '/app/elevadores'
+      preLoaderRoute: typeof AuthenticatedAppElevadoresRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/configuracoes': {
       id: '/_authenticated/app/configuracoes'
       path: '/configuracoes'
@@ -388,6 +408,7 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppAgendaRoute: typeof AuthenticatedAppAgendaRoute
   AuthenticatedAppClientesRoute: typeof AuthenticatedAppClientesRoute
   AuthenticatedAppConfiguracoesRoute: typeof AuthenticatedAppConfiguracoesRoute
+  AuthenticatedAppElevadoresRoute: typeof AuthenticatedAppElevadoresRoute
   AuthenticatedAppEstoqueRoute: typeof AuthenticatedAppEstoqueRoute
   AuthenticatedAppFinanceiroRoute: typeof AuthenticatedAppFinanceiroRoute
   AuthenticatedAppOrdensRoute: typeof AuthenticatedAppOrdensRoute
@@ -403,6 +424,7 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppAgendaRoute: AuthenticatedAppAgendaRoute,
   AuthenticatedAppClientesRoute: AuthenticatedAppClientesRoute,
   AuthenticatedAppConfiguracoesRoute: AuthenticatedAppConfiguracoesRoute,
+  AuthenticatedAppElevadoresRoute: AuthenticatedAppElevadoresRoute,
   AuthenticatedAppEstoqueRoute: AuthenticatedAppEstoqueRoute,
   AuthenticatedAppFinanceiroRoute: AuthenticatedAppFinanceiroRoute,
   AuthenticatedAppOrdensRoute: AuthenticatedAppOrdensRoute,
@@ -439,3 +461,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

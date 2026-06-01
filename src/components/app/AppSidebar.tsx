@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, Car, ClipboardList, Droplet, Package,
-  ShoppingCart, Wallet, BarChart3, Calendar, MessageCircle, Settings, Zap,
+  ShoppingCart, Wallet, BarChart3, Calendar, MessageCircle, Settings, Zap, Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const items: Item[] = [
   { to: "/app/clientes", label: "Clientes", icon: Users },
   { to: "/app/veiculos", label: "Veículos", icon: Car },
   { to: "/app/ordens", label: "Ordens de Serviço", icon: ClipboardList },
+  { to: "/app/elevadores", label: "Elevadores", icon: Wrench },
   { to: "/app/troca-oleo", label: "Troca de Óleo", icon: Droplet },
   { to: "/app/estoque", label: "Estoque", icon: Package },
   { to: "/app/pdv", label: "PDV", icon: ShoppingCart },
