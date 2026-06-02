@@ -1,26 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { logSecurityEvent } from "@/lib/security.logger";
 
-export const listMensagens = createServerFn({ method: "GET" }).handler(async ({ context }) => {
-  const { supabase } = context as any;
-  const { data, error } = await supabase
-    .from("whatsapp_mensagens")
-    .select("id,telefone,mensagem,evento,status,enviado_em,erro,tentativas,created_at")
-    .order("created_at", { ascending: false })
-    .limit(100);
-  if (error) throw new Error(error.message);
-  return data ?? [];
-});
-
-export const getConfig = createServerFn({ method: "GET" }).handler(async ({ context }) => {
-  const { supabase } = context as any;
-  const { data, error } = await supabase
-    .from("whatsapp_config")
-    .select("*")
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data;
-});
+// ============ SCHEMAS & TYPES ============
 
 const ConfigInput = z.object({
   ativo: z.boolean().optional(),
@@ -33,22 +15,6 @@ const ConfigInput = z.object({
 });
 export type ConfigInputType = z.infer<typeof ConfigInput>;
 
-export const upsertConfig = createServerFn({ method: "POST" })
-  .inputValidator((d: ConfigInputType) => ConfigInput.parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase } = context as any;
-    // Verifica se já existe (1 por workshop via RLS)
-    const { data: existing } = await supabase.from("whatsapp_config").select("workshop_id").maybeSingle();
-    if (existing) {
-      const { error } = await supabase.from("whatsapp_config").update(data).eq("workshop_id", existing.workshop_id);
-      if (error) throw new Error(error.message);
-    } else {
-      const { error } = await supabase.from("whatsapp_config").insert(data);
-      if (error) throw new Error(error.message);
-    }
-    return { ok: true };
-  });
-
 const EnqueueInput = z.object({
   telefone: z.string(),
   mensagem: z.string(),
@@ -58,22 +24,195 @@ const EnqueueInput = z.object({
 });
 export type EnqueueInputType = z.infer<typeof EnqueueInput>;
 
+// ============ HELPER FUNCTIONS ============
+
+export async function verifyIsOwnerOrAdmin(supabase: any, userId?: string) {
+  if (!userId) throw new Error("Usuário não autenticado");
+
+  const { data, error } = await supabase
+    .from("workshop_members")
+    .select("role,workshop_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  
+  const role = data?.role;
+  const workshopId = data?.workshop_id;
+
+  if (role !== "owner" && role !== "admin") {
+    await logSecurityEvent(
+      supabase,
+      userId,
+      workshopId,
+      "whatsapp_unauthorized_access",
+      "warning",
+      { user_role: role ?? "none", attempted_action: "manage_whatsapp_config" }
+    );
+    throw new Error("Permissão negada. Apenas administradores ou proprietários podem gerenciar o WhatsApp.");
+  }
+  return workshopId;
+}
+
+// ============ HANDLERS (for testing & execution) ============
+
+export async function listMensagensHandler({ context }: { context: any }) {
+  const { supabase, userId } = context;
+
+  const { data: member, error: errMember } = await supabase
+    .from("workshop_members")
+    .select("workshop_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (errMember) throw new Error(errMember.message);
+  const workshopId = member?.workshop_id;
+
+  const { data, error } = await supabase
+    .from("whatsapp_mensagens")
+    .select("id,telefone,mensagem,evento,status,enviado_em,erro,tentativas,created_at")
+    .eq("workshop_id", workshopId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function getConfigHandler({ context }: { context: any }) {
+  const { supabase, userId } = context;
+  const workshopId = await verifyIsOwnerOrAdmin(supabase, userId);
+
+  const { data, error } = await supabase
+    .from("whatsapp_config")
+    .select("*")
+    .eq("workshop_id", workshopId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+
+  // Nunca retornar o token real do WhatsApp nas respostas da API
+  if (data && data.token) {
+    data.token = "***";
+  }
+  return data;
+}
+
+export async function upsertConfigHandler({ data, context }: { data: ConfigInputType; context: any }) {
+  const { supabase, userId } = context;
+  
+  // Verificar permissão e obter workshop_id
+  const workshopId = await verifyIsOwnerOrAdmin(supabase, userId);
+
+  // Buscar config existente para logar modificações
+  const { data: existing } = await supabase
+    .from("whatsapp_config")
+    .select("*")
+    .eq("workshop_id", workshopId)
+    .maybeSingle();
+
+  // Se o token vier como o valor mascarado "***", não atualizamos/sobrescrevemos o valor no banco
+  const payload = { ...data };
+  if (payload.token === "***") {
+    delete payload.token;
+  }
+
+  if (existing) {
+    const { error } = await supabase
+      .from("whatsapp_config")
+      .update(payload)
+      .eq("workshop_id", workshopId);
+    if (error) throw new Error(error.message);
+
+    // Calcular alterações para o log
+    const changes: any = {};
+    for (const k of Object.keys(payload)) {
+      const val = (payload as any)[k];
+      const oldVal = (existing as any)[k];
+      if (val !== oldVal) {
+        changes[k] = {
+          old: k === "token" ? (oldVal ? "***" : null) : oldVal,
+          new: k === "token" ? (val ? "***" : null) : val
+        };
+      }
+    }
+    
+    if (Object.keys(changes).length > 0) {
+      await logSecurityEvent(
+        supabase,
+        userId,
+        workshopId,
+        "whatsapp_config_changed",
+        "info",
+        { changes }
+      );
+    }
+  } else {
+    const { error } = await supabase
+      .from("whatsapp_config")
+      .insert({
+        ...payload,
+        workshop_id: workshopId
+      });
+    if (error) throw new Error(error.message);
+
+    // Saneamento para log
+    const sanitizedData = { ...payload };
+    if (sanitizedData.token) sanitizedData.token = "***";
+
+    await logSecurityEvent(
+      supabase,
+      userId,
+      workshopId,
+      "whatsapp_config_created",
+      "info",
+      { config: sanitizedData }
+    );
+  }
+  return { ok: true };
+}
+
+export async function enqueueWhatsappMessageHandler({ data, context }: { data: EnqueueInputType; context: any }) {
+  const { supabase, userId } = context;
+  
+  const { data: member, error: errMember } = await supabase
+    .from("workshop_members")
+    .select("workshop_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+    
+  if (errMember) throw new Error(errMember.message);
+  const workshopId = member?.workshop_id;
+  if (!workshopId) throw new Error("Oficina não encontrada.");
+
+  const { error } = await supabase.from("whatsapp_mensagens").insert({
+    workshop_id: workshopId,
+    telefone: data.telefone.replace(/\D/g, ""), // Limpar caracteres não numéricos
+    mensagem: data.mensagem,
+    evento: data.evento || "manual",
+    ref_tipo: data.ref_tipo,
+    ref_id: data.ref_id,
+    status: "pendente"
+  });
+
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+// ============ SERVER FUNCTIONS (expostos para o front-end) ============
+
+export const listMensagens = createServerFn({ method: "GET" }).handler(listMensagensHandler);
+
+export const getConfig = createServerFn({ method: "GET" }).handler(getConfigHandler);
+
+export const upsertConfig = createServerFn({ method: "POST" })
+  .inputValidator((d: ConfigInputType) => ConfigInput.parse(d))
+  .handler(upsertConfigHandler);
+
 export const enqueueWhatsappMessage = createServerFn({ method: "POST" })
   .inputValidator((d: EnqueueInputType) => EnqueueInput.parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase } = context as any;
-    
-    // O workshop_id será preenchido via trigger se não fornecido e se o user for membro de apenas 1
-    // A RLS "members insert wamsg" cuidará da validação
-    const { error } = await supabase.from("whatsapp_mensagens").insert({
-      telefone: data.telefone.replace(/\D/g, ""), // Limpar caracteres não numéricos
-      mensagem: data.mensagem,
-      evento: data.evento || "manual",
-      ref_tipo: data.ref_tipo,
-      ref_id: data.ref_id,
-      status: "pendente"
-    });
-
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
+  .handler(enqueueWhatsappMessageHandler);

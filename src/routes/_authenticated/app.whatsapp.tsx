@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { listMensagens, getConfig, upsertConfig } from "@/lib/whatsapp.functions";
+import { getWorkshop } from "@/lib/configuracoes.functions";
 
 export const Route = createFileRoute("/_authenticated/app/whatsapp")({ component: Page });
 
@@ -30,9 +31,17 @@ function Page() {
   const listMsgs = useServerFn(listMensagens);
   const getCfg = useServerFn(getConfig);
   const upsert = useServerFn(upsertConfig);
+  const fnGetW = useServerFn(getWorkshop);
+
+  const { data: workshop } = useQuery({ queryKey: ["workshop"], queryFn: () => fnGetW() });
+  const isOwnerOrAdmin = workshop?.role === "owner" || workshop?.role === "admin";
 
   const { data: msgs = [], isLoading } = useQuery({ queryKey: ["wa-msgs"], queryFn: () => listMsgs() });
-  const { data: cfg } = useQuery({ queryKey: ["wa-config"], queryFn: () => getCfg() });
+  const { data: cfg } = useQuery({ 
+    queryKey: ["wa-config"], 
+    queryFn: () => getCfg(),
+    enabled: !!isOwnerOrAdmin
+  });
 
   const [form, setForm] = useState({
     ativo: false, instance_url: "", token: "",
@@ -73,7 +82,10 @@ function Page() {
       </motion.div>
 
       <div className="flex gap-2">
-        {[{ key: "mensagens" as const, label: "Mensagens", icon: MessageCircle }, { key: "config" as const, label: "Configuração", icon: Settings2 }].map(t => (
+        {[
+          { key: "mensagens" as const, label: "Mensagens", icon: MessageCircle },
+          ...(isOwnerOrAdmin ? [{ key: "config" as const, label: "Configuração", icon: Settings2 }] : [])
+        ].map(t => (
           <button key={t.key} onClick={() => setAba(t.key)}
             className={cn("inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition",
               aba === t.key ? "bg-primary text-primary-foreground" : "bg-secondary/50 text-muted-foreground hover:bg-secondary")}>
@@ -116,7 +128,7 @@ function Page() {
         </div>
       )}
 
-      {aba === "config" && (
+      {aba === "config" && isOwnerOrAdmin && (
         <div className="space-y-4">
           <div className="glass rounded-2xl p-5 space-y-4">
             <div className="flex items-center justify-between">
