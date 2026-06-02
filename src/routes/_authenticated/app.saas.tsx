@@ -404,7 +404,7 @@ function Page() {
                 })}
                 {filteredWorkshops.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-12 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-12 text-center text-muted-foreground">
                       Nenhuma oficina localizada com os filtros fornecidos.
                     </td>
                   </tr>
