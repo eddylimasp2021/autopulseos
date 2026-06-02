@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/public/cron/daily-reminders")({
       GET: async ({ request }: { request: Request }) => {
     // 1. Validação de segurança idêntica ao dispatch
     const url = new URL(request.url);
-    const cronSecret = process.env.CRON_SECRET || import.meta.env.VITE_CRON_SECRET;
+    const cronSecret = process.env.CRON_SECRET || import.meta.env?.VITE_CRON_SECRET;
     
     const authHeader = request.headers.get("Authorization");
     const passedSecret = url.searchParams.get("secret") || (authHeader ? authHeader.replace("Bearer ", "") : null);
@@ -55,7 +55,7 @@ export const Route = createFileRoute("/api/public/cron/daily-reminders")({
       const workshopsIds = [...new Set(trocasOleo.map(t => t.workshop_id))];
       const { data: configs } = await supabaseAdmin
         .from("whatsapp_config")
-        .select("workshop_id, template_lembrete_oleo")
+        .select("workshop_id, ativo, template_lembrete_oleo, callboot_ativo, callboot_template_lembrete_oleo")
         .in("workshop_id", workshopsIds);
         
       const configMap = new Map(configs?.map(c => [c.workshop_id, c]));
@@ -67,39 +67,77 @@ export const Route = createFileRoute("/api/public/cron/daily-reminders")({
         
         if (!telefone) continue; // Sem telefone, não temos como mandar msg
         
-        // Pega o template configurado ou usa um padrão
-        const template = config?.template_lembrete_oleo || 
-          "Olá {cliente_nome}! Notamos que a troca de óleo do seu veículo {veiculo_modelo} (Placa: {veiculo_placa}) está próxima ({proxima_data}). Que tal agendar a próxima revisão conosco?";
-          
         const clienteNome = troca.clientes?.nome?.split(" ")[0] || "Cliente";
         const veiculoModelo = troca.veiculos?.modelo || "veículo";
         const veiculoPlaca = troca.veiculos?.placa || "N/A";
         // Formatar data para BR
         const dataFormatada = dataDaquiA7Dias.toLocaleDateString('pt-BR');
 
-        // Substituir variáveis no template
-        const mensagemFinal = template
-          .replace(/{cliente_nome}/g, clienteNome)
-          .replace(/{veiculo_modelo}/g, veiculoModelo)
-          .replace(/{veiculo_placa}/g, veiculoPlaca)
-          .replace(/{proxima_data}/g, dataFormatada);
+        let enfileirou = false;
 
-        // Inserir na fila de envio
-        const { error: insertError } = await supabaseAdmin
-          .from("whatsapp_mensagens")
-          .insert({
-            workshop_id: troca.workshop_id,
-            telefone: telefone.replace(/\D/g, ""), // Somente números
-            mensagem: mensagemFinal,
-            evento: "lembrete_oleo",
-            ref_tipo: "troca_oleo",
-            ref_id: troca.id,
-            status: "pendente"
-          });
+        // Se UAZAPI estiver ativo, cria lembrete para UAZAPI
+        if (config?.ativo) {
+          const template = config.template_lembrete_oleo || 
+            "Olá {cliente_nome}! Notamos que a troca de óleo do seu veículo {veiculo_modelo} (Placa: {veiculo_placa}) está próxima ({proxima_data}). Que tal agendar a próxima revisão conosco?";
+            
+          const mensagemFinal = template
+            .replace(/{cliente_nome}/g, clienteNome)
+            .replace(/{veiculo_modelo}/g, veiculoModelo)
+            .replace(/{veiculo_placa}/g, veiculoPlaca)
+            .replace(/{proxima_data}/g, dataFormatada);
 
-        if (insertError) {
-          results.erros.push(`Falha ao enfileirar lembrete OS ${troca.id}: ${insertError.message}`);
-        } else {
+          const { error: insertError } = await supabaseAdmin
+            .from("whatsapp_mensagens")
+            .insert({
+              workshop_id: troca.workshop_id,
+              telefone: telefone.replace(/\D/g, ""),
+              mensagem: mensagemFinal,
+              evento: "lembrete_oleo",
+              ref_tipo: "troca_oleo",
+              ref_id: troca.id,
+              status: "pendente",
+              provedor: "uazapi"
+            });
+
+          if (insertError) {
+            results.erros.push(`Falha ao enfileirar lembrete UAZAPI OS ${troca.id}: ${insertError.message}`);
+          } else {
+            enfileirou = true;
+          }
+        }
+
+        // Se Callboot estiver ativo, cria lembrete para Callboot
+        if (config?.callboot_ativo) {
+          const template = config.callboot_template_lembrete_oleo || 
+            "Olá {cliente_nome}! Notamos que a troca de óleo do seu veículo {veiculo_modelo} (Placa: {veiculo_placa}) está próxima ({proxima_data}). Que tal agendar a próxima revisão conosco?";
+            
+          const mensagemFinal = template
+            .replace(/{cliente_nome}/g, clienteNome)
+            .replace(/{veiculo_modelo}/g, veiculoModelo)
+            .replace(/{veiculo_placa}/g, veiculoPlaca)
+            .replace(/{proxima_data}/g, dataFormatada);
+
+          const { error: insertError } = await supabaseAdmin
+            .from("whatsapp_mensagens")
+            .insert({
+              workshop_id: troca.workshop_id,
+              telefone: telefone.replace(/\D/g, ""),
+              mensagem: mensagemFinal,
+              evento: "lembrete_oleo",
+              ref_tipo: "troca_oleo",
+              ref_id: troca.id,
+              status: "pendente",
+              provedor: "callboot"
+            });
+
+          if (insertError) {
+            results.erros.push(`Falha ao enfileirar lembrete Callboot OS ${troca.id}: ${insertError.message}`);
+          } else {
+            enfileirou = true;
+          }
+        }
+
+        if (enfileirou) {
           // Atualiza status da troca de óleo para 'notificado' para não mandar novamente
           await supabaseAdmin
             .from("troca_oleo")

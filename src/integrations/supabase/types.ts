@@ -756,6 +756,13 @@ export type Database = {
       whatsapp_config: {
         Row: {
           ativo: boolean
+          callboot_ativo: boolean
+          callboot_instance_url: string | null
+          callboot_template_cobranca: string | null
+          callboot_template_lembrete_oleo: string | null
+          callboot_template_os_concluida: string | null
+          callboot_template_os_entregue: string | null
+          callboot_token: string | null
           created_at: string
           instance_url: string | null
           template_cobranca: string | null
@@ -768,6 +775,13 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
+          callboot_ativo?: boolean
+          callboot_instance_url?: string | null
+          callboot_template_cobranca?: string | null
+          callboot_template_lembrete_oleo?: string | null
+          callboot_template_os_concluida?: string | null
+          callboot_template_os_entregue?: string | null
+          callboot_token?: string | null
           created_at?: string
           instance_url?: string | null
           template_cobranca?: string | null
@@ -780,6 +794,13 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
+          callboot_ativo?: boolean
+          callboot_instance_url?: string | null
+          callboot_template_cobranca?: string | null
+          callboot_template_lembrete_oleo?: string | null
+          callboot_template_os_concluida?: string | null
+          callboot_template_os_entregue?: string | null
+          callboot_token?: string | null
           created_at?: string
           instance_url?: string | null
           template_cobranca?: string | null
@@ -808,6 +829,7 @@ export type Database = {
           evento: string | null
           id: string
           mensagem: string
+          provedor: string
           ref_id: string | null
           ref_tipo: string | null
           status: Database["public"]["Enums"]["whatsapp_msg_status"]
@@ -823,6 +845,7 @@ export type Database = {
           evento?: string | null
           id?: string
           mensagem: string
+          provedor?: string
           ref_id?: string | null
           ref_tipo?: string | null
           status?: Database["public"]["Enums"]["whatsapp_msg_status"]
@@ -838,6 +861,7 @@ export type Database = {
           evento?: string | null
           id?: string
           mensagem?: string
+          provedor?: string
           ref_id?: string | null
           ref_tipo?: string | null
           status?: Database["public"]["Enums"]["whatsapp_msg_status"]

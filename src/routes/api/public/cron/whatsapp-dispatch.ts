@@ -44,13 +44,54 @@ async function sendWhatsappMessage(instanceUrl: string, token: string, number: s
   return await response.json();
 }
 
+// Função para disparar a API do Callboot
+async function sendCallbootMessage(instanceUrl: string, token: string, number: string, text: string) {
+  // Se for a API do CallMeBot (URL contém callmebot)
+  if (instanceUrl.includes("callmebot.com") || instanceUrl.includes("whatsapp.php")) {
+    const url = new URL(instanceUrl);
+    url.searchParams.set("phone", number);
+    url.searchParams.set("text", text);
+    url.searchParams.set("apikey", token);
+
+    const response = await fetch(url.toString(), { method: "GET" });
+    if (!response.ok) {
+      const textResp = await response.text();
+      throw new Error(`Erro no CallMeBot (${response.status}): ${textResp}`);
+    }
+    return { ok: true };
+  }
+
+  // Gateway customizado POST JSON
+  const response = await fetch(instanceUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      "apikey": token,
+    },
+    body: JSON.stringify({
+      number: number,
+      phone: number,
+      message: text,
+      text: text
+    })
+  });
+
+  if (!response.ok) {
+    const textResp = await response.text();
+    throw new Error(`Erro no Callboot (${response.status}): ${textResp}`);
+  }
+
+  return await response.json();
+}
+
 export const Route = createFileRoute("/api/public/cron/whatsapp-dispatch")({
   server: {
     handlers: {
       GET: async ({ request }: { request: Request }) => {
     // 1. Validação simples de segurança (Cron Secret)
     const url = new URL(request.url);
-    const cronSecret = process.env.CRON_SECRET || import.meta.env.VITE_CRON_SECRET;
+    const cronSecret = process.env.CRON_SECRET || import.meta.env?.VITE_CRON_SECRET;
     
     // Suportamos autenticação via header Authorization: Bearer <secret> ou query string ?secret=...
     const authHeader = request.headers.get("Authorization");
@@ -90,25 +131,48 @@ export const Route = createFileRoute("/api/public/cron/whatsapp-dispatch")({
       // 4. Processar e enviar as mensagens
       for (const msg of mensagens) {
         const config = configMap.get(msg.workshop_id);
+        const isCallboot = msg.provedor === "callboot";
 
-        if (!config || !config.ativo || !config.instance_url || !config.token) {
-          // Marca como falha se oficina não configurou WhatsApp
-          await supabaseAdmin
-            .from("whatsapp_mensagens")
-            .update({ status: "falhou", erro: "WhatsApp não configurado ou inativo para a oficina." })
-            .eq("id", msg.id);
-          results.falhas++;
-          continue;
+        if (isCallboot) {
+          if (!config || !config.callboot_ativo || !config.callboot_instance_url || !config.callboot_token) {
+            // Marca como falha se oficina não configurou Callboot
+            await supabaseAdmin
+              .from("whatsapp_mensagens")
+              .update({ status: "falhou", erro: "API Callboot não configurada ou inativa para a oficina." })
+              .eq("id", msg.id);
+            results.falhas++;
+            continue;
+          }
+        } else {
+          // UAZAPI (padrão)
+          if (!config || !config.ativo || !config.instance_url || !config.token) {
+            // Marca como falha se oficina não configurou WhatsApp
+            await supabaseAdmin
+              .from("whatsapp_mensagens")
+              .update({ status: "falhou", erro: "WhatsApp não configurado ou inativo para a oficina." })
+              .eq("id", msg.id);
+            results.falhas++;
+            continue;
+          }
         }
 
         try {
-          // Tentar enviar a mensagem pela UAZAPI
-          await sendWhatsappMessage(
-            config.instance_url,
-            config.token,
-            msg.telefone,
-            msg.mensagem
-          );
+          // Tentar enviar a mensagem pelo respectivo canal
+          if (isCallboot) {
+            await sendCallbootMessage(
+              config.callboot_instance_url!,
+              config.callboot_token!,
+              msg.telefone,
+              msg.mensagem
+            );
+          } else {
+            await sendWhatsappMessage(
+              config.instance_url!,
+              config.token!,
+              msg.telefone,
+              msg.mensagem
+            );
+          }
 
           // Atualizar status no banco
           await supabaseAdmin

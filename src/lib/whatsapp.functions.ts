@@ -12,6 +12,14 @@ const ConfigInput = z.object({
   template_os_entregue: z.string().trim().max(1000).optional().nullable(),
   template_lembrete_oleo: z.string().trim().max(1000).optional().nullable(),
   template_cobranca: z.string().trim().max(1000).optional().nullable(),
+
+  callboot_ativo: z.boolean().optional(),
+  callboot_instance_url: z.string().trim().max(255).optional().nullable(),
+  callboot_token: z.string().trim().max(500).optional().nullable(),
+  callboot_template_os_concluida: z.string().trim().max(1000).optional().nullable(),
+  callboot_template_os_entregue: z.string().trim().max(1000).optional().nullable(),
+  callboot_template_lembrete_oleo: z.string().trim().max(1000).optional().nullable(),
+  callboot_template_cobranca: z.string().trim().max(1000).optional().nullable(),
 });
 export type ConfigInputType = z.infer<typeof ConfigInput>;
 
@@ -93,9 +101,10 @@ export async function getConfigHandler({ context }: { context: any }) {
     .maybeSingle();
   if (error) throw new Error(error.message);
 
-  // Nunca retornar o token real do WhatsApp nas respostas da API
-  if (data && data.token) {
-    data.token = "***";
+  // Nunca retornar o token real do WhatsApp/Callboot nas respostas da API
+  if (data) {
+    if (data.token) data.token = "***";
+    if (data.callboot_token) data.callboot_token = "***";
   }
   return data;
 }
@@ -118,6 +127,9 @@ export async function upsertConfigHandler({ data, context }: { data: ConfigInput
   if (payload.token === "***") {
     delete payload.token;
   }
+  if (payload.callboot_token === "***") {
+    delete payload.callboot_token;
+  }
 
   if (existing) {
     const { error } = await supabase
@@ -128,13 +140,14 @@ export async function upsertConfigHandler({ data, context }: { data: ConfigInput
 
     // Calcular alterações para o log
     const changes: any = {};
+    const sensitiveKeys = ["token", "callboot_token"];
     for (const k of Object.keys(payload)) {
       const val = (payload as any)[k];
       const oldVal = (existing as any)[k];
       if (val !== oldVal) {
         changes[k] = {
-          old: k === "token" ? (oldVal ? "***" : null) : oldVal,
-          new: k === "token" ? (val ? "***" : null) : val
+          old: sensitiveKeys.includes(k) ? (oldVal ? "***" : null) : oldVal,
+          new: sensitiveKeys.includes(k) ? (val ? "***" : null) : val
         };
       }
     }
@@ -161,6 +174,7 @@ export async function upsertConfigHandler({ data, context }: { data: ConfigInput
     // Saneamento para log
     const sanitizedData = { ...payload };
     if (sanitizedData.token) sanitizedData.token = "***";
+    if (sanitizedData.callboot_token) sanitizedData.callboot_token = "***";
 
     await logSecurityEvent(
       supabase,

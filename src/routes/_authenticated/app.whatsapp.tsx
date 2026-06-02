@@ -25,7 +25,7 @@ const statusIcon: Record<string, ReactNode> = {
 };
 
 function Page() {
-  const [aba, setAba] = useState<"mensagens" | "config">("mensagens");
+  const [aba, setAba] = useState<"mensagens" | "config" | "callboot">("mensagens");
   const qc = useQueryClient();
 
   const listMsgs = useServerFn(listMensagens);
@@ -47,6 +47,10 @@ function Page() {
     ativo: false, instance_url: "", token: "",
     template_os_concluida: "", template_os_entregue: "",
     template_lembrete_oleo: "", template_cobranca: "",
+
+    callboot_ativo: false, callboot_instance_url: "", callboot_token: "",
+    callboot_template_os_concluida: "", callboot_template_os_entregue: "",
+    callboot_template_lembrete_oleo: "", callboot_template_cobranca: "",
   });
 
   useEffect(() => {
@@ -58,6 +62,14 @@ function Page() {
       template_os_entregue: (cfg as any).template_os_entregue ?? "",
       template_lembrete_oleo: (cfg as any).template_lembrete_oleo ?? "",
       template_cobranca: (cfg as any).template_cobranca ?? "",
+
+      callboot_ativo: !!(cfg as any).callboot_ativo,
+      callboot_instance_url: (cfg as any).callboot_instance_url ?? "",
+      callboot_token: (cfg as any).callboot_token ?? "",
+      callboot_template_os_concluida: (cfg as any).callboot_template_os_concluida ?? "",
+      callboot_template_os_entregue: (cfg as any).callboot_template_os_entregue ?? "",
+      callboot_template_lembrete_oleo: (cfg as any).callboot_template_lembrete_oleo ?? "",
+      callboot_template_cobranca: (cfg as any).callboot_template_cobranca ?? "",
     });
   }, [cfg]);
 
@@ -84,7 +96,10 @@ function Page() {
       <div className="flex gap-2">
         {[
           { key: "mensagens" as const, label: "Mensagens", icon: MessageCircle },
-          ...(isOwnerOrAdmin ? [{ key: "config" as const, label: "Configuração", icon: Settings2 }] : [])
+          ...(isOwnerOrAdmin ? [
+            { key: "config" as const, label: "Mensagens automáticas via UAZAPI", icon: Settings2 },
+            { key: "callboot" as const, label: "Aviso Callboot", icon: Bot }
+          ] : [])
         ].map(t => (
           <button key={t.key} onClick={() => setAba(t.key)}
             className={cn("inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition",
@@ -150,6 +165,36 @@ function Page() {
             <div><Label>OS entregue</Label><Textarea rows={2} value={form.template_os_entregue} onChange={e => setForm(s => ({ ...s, template_os_entregue: e.target.value }))} /></div>
             <div><Label>Lembrete de óleo</Label><Textarea rows={2} value={form.template_lembrete_oleo} onChange={e => setForm(s => ({ ...s, template_lembrete_oleo: e.target.value }))} /></div>
             <div><Label>Cobrança</Label><Textarea rows={2} value={form.template_cobranca} onChange={e => setForm(s => ({ ...s, template_cobranca: e.target.value }))} /></div>
+          </div>
+
+          <Button onClick={() => mSave.mutate(form)} disabled={mSave.isPending} className="w-full sm:w-auto">
+            <Save className="h-4 w-4 mr-2" /> {mSave.isPending ? "Salvando…" : "Salvar configuração"}
+          </Button>
+        </div>
+      )}
+
+      {aba === "callboot" && isOwnerOrAdmin && (
+        <div className="space-y-4">
+          <div className="glass rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Automação Callboot ativa</div>
+                <div className="text-xs text-muted-foreground">Envia avisos automáticos em eventos de OS via Callboot.</div>
+              </div>
+              <Switch checked={form.callboot_ativo} onCheckedChange={(v) => setForm(s => ({ ...s, callboot_ativo: v }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Callboot Instance URL</Label><Input value={form.callboot_instance_url} onChange={e => setForm(s => ({ ...s, callboot_instance_url: e.target.value }))} placeholder="https://api.callmebot.com/whatsapp.php ou https://..." /></div>
+              <div><Label>Callboot Token / API Key</Label><Input type="password" value={form.callboot_token} onChange={e => setForm(s => ({ ...s, callboot_token: e.target.value }))} /></div>
+            </div>
+          </div>
+
+          <div className="glass rounded-2xl p-5 space-y-3">
+            <h3 className="font-medium text-sm">Templates (variáveis: {`{cliente}, {numero}, {valor}, {oficina}, {veiculo}, {placa}, {data}`})</h3>
+            <div><Label>OS concluída</Label><Textarea rows={2} value={form.callboot_template_os_concluida} onChange={e => setForm(s => ({ ...s, callboot_template_os_concluida: e.target.value }))} /></div>
+            <div><Label>OS entregue</Label><Textarea rows={2} value={form.callboot_template_os_entregue} onChange={e => setForm(s => ({ ...s, callboot_template_os_entregue: e.target.value }))} /></div>
+            <div><Label>Lembrete de óleo</Label><Textarea rows={2} value={form.callboot_template_lembrete_oleo} onChange={e => setForm(s => ({ ...s, callboot_template_lembrete_oleo: e.target.value }))} /></div>
+            <div><Label>Cobrança</Label><Textarea rows={2} value={form.callboot_template_cobranca} onChange={e => setForm(s => ({ ...s, callboot_template_cobranca: e.target.value }))} /></div>
           </div>
 
           <Button onClick={() => mSave.mutate(form)} disabled={mSave.isPending} className="w-full sm:w-auto">
