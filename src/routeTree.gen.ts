@@ -21,13 +21,16 @@ import { Route as AuthenticatedAppSaasRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedAppRelatoriosRouteImport } from './routes/_authenticated/app.relatorios'
 import { Route as AuthenticatedAppPdvRouteImport } from './routes/_authenticated/app.pdv'
 import { Route as AuthenticatedAppOrdensRouteImport } from './routes/_authenticated/app.ordens'
+import { Route as AuthenticatedAppFornecedoresRouteImport } from './routes/_authenticated/app.fornecedores'
 import { Route as AuthenticatedAppFiscalRouteImport } from './routes/_authenticated/app.fiscal'
 import { Route as AuthenticatedAppFinanceiroRouteImport } from './routes/_authenticated/app.financeiro'
 import { Route as AuthenticatedAppEstoqueRouteImport } from './routes/_authenticated/app.estoque'
 import { Route as AuthenticatedAppElevadoresRouteImport } from './routes/_authenticated/app.elevadores'
 import { Route as AuthenticatedAppConfiguracoesRouteImport } from './routes/_authenticated/app.configuracoes'
 import { Route as AuthenticatedAppClientesRouteImport } from './routes/_authenticated/app.clientes'
+import { Route as AuthenticatedAppAssinaturaRouteImport } from './routes/_authenticated/app.assinatura'
 import { Route as AuthenticatedAppAgendaRouteImport } from './routes/_authenticated/app.agenda'
+import { Route as ApiPublicWebhooksPaymentRouteImport } from './routes/api/public/webhooks/payment'
 import { Route as ApiPublicCronWhatsappDispatchRouteImport } from './routes/api/public/cron/whatsapp-dispatch'
 import { Route as ApiPublicCronDailyRemindersRouteImport } from './routes/api/public/cron/daily-reminders'
 
@@ -94,6 +97,12 @@ const AuthenticatedAppOrdensRoute = AuthenticatedAppOrdensRouteImport.update({
   path: '/ordens',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppFornecedoresRoute =
+  AuthenticatedAppFornecedoresRouteImport.update({
+    id: '/fornecedores',
+    path: '/fornecedores',
+    getParentRoute: () => AuthenticatedAppRoute,
+  } as any)
 const AuthenticatedAppFiscalRoute = AuthenticatedAppFiscalRouteImport.update({
   id: '/fiscal',
   path: '/fiscal',
@@ -128,11 +137,23 @@ const AuthenticatedAppClientesRoute =
     path: '/clientes',
     getParentRoute: () => AuthenticatedAppRoute,
   } as any)
+const AuthenticatedAppAssinaturaRoute =
+  AuthenticatedAppAssinaturaRouteImport.update({
+    id: '/assinatura',
+    path: '/assinatura',
+    getParentRoute: () => AuthenticatedAppRoute,
+  } as any)
 const AuthenticatedAppAgendaRoute = AuthenticatedAppAgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const ApiPublicWebhooksPaymentRoute =
+  ApiPublicWebhooksPaymentRouteImport.update({
+    id: '/api/public/webhooks/payment',
+    path: '/api/public/webhooks/payment',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicCronWhatsappDispatchRoute =
   ApiPublicCronWhatsappDispatchRouteImport.update({
     id: '/api/public/cron/whatsapp-dispatch',
@@ -151,12 +172,14 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/app/agenda': typeof AuthenticatedAppAgendaRoute
+  '/app/assinatura': typeof AuthenticatedAppAssinaturaRoute
   '/app/clientes': typeof AuthenticatedAppClientesRoute
   '/app/configuracoes': typeof AuthenticatedAppConfiguracoesRoute
   '/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
   '/app/fiscal': typeof AuthenticatedAppFiscalRoute
+  '/app/fornecedores': typeof AuthenticatedAppFornecedoresRoute
   '/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/app/pdv': typeof AuthenticatedAppPdvRoute
   '/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
@@ -167,17 +190,20 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AuthenticatedAppIndexRoute
   '/api/public/cron/daily-reminders': typeof ApiPublicCronDailyRemindersRoute
   '/api/public/cron/whatsapp-dispatch': typeof ApiPublicCronWhatsappDispatchRoute
+  '/api/public/webhooks/payment': typeof ApiPublicWebhooksPaymentRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app/agenda': typeof AuthenticatedAppAgendaRoute
+  '/app/assinatura': typeof AuthenticatedAppAssinaturaRoute
   '/app/clientes': typeof AuthenticatedAppClientesRoute
   '/app/configuracoes': typeof AuthenticatedAppConfiguracoesRoute
   '/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
   '/app/fiscal': typeof AuthenticatedAppFiscalRoute
+  '/app/fornecedores': typeof AuthenticatedAppFornecedoresRoute
   '/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/app/pdv': typeof AuthenticatedAppPdvRoute
   '/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
@@ -188,6 +214,7 @@ export interface FileRoutesByTo {
   '/app': typeof AuthenticatedAppIndexRoute
   '/api/public/cron/daily-reminders': typeof ApiPublicCronDailyRemindersRoute
   '/api/public/cron/whatsapp-dispatch': typeof ApiPublicCronWhatsappDispatchRoute
+  '/api/public/webhooks/payment': typeof ApiPublicWebhooksPaymentRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -196,12 +223,14 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/_authenticated/app/agenda': typeof AuthenticatedAppAgendaRoute
+  '/_authenticated/app/assinatura': typeof AuthenticatedAppAssinaturaRoute
   '/_authenticated/app/clientes': typeof AuthenticatedAppClientesRoute
   '/_authenticated/app/configuracoes': typeof AuthenticatedAppConfiguracoesRoute
   '/_authenticated/app/elevadores': typeof AuthenticatedAppElevadoresRoute
   '/_authenticated/app/estoque': typeof AuthenticatedAppEstoqueRoute
   '/_authenticated/app/financeiro': typeof AuthenticatedAppFinanceiroRoute
   '/_authenticated/app/fiscal': typeof AuthenticatedAppFiscalRoute
+  '/_authenticated/app/fornecedores': typeof AuthenticatedAppFornecedoresRoute
   '/_authenticated/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/_authenticated/app/pdv': typeof AuthenticatedAppPdvRoute
   '/_authenticated/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
@@ -212,6 +241,7 @@ export interface FileRoutesById {
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
   '/api/public/cron/daily-reminders': typeof ApiPublicCronDailyRemindersRoute
   '/api/public/cron/whatsapp-dispatch': typeof ApiPublicCronWhatsappDispatchRoute
+  '/api/public/webhooks/payment': typeof ApiPublicWebhooksPaymentRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -220,12 +250,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app'
     | '/app/agenda'
+    | '/app/assinatura'
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/elevadores'
     | '/app/estoque'
     | '/app/financeiro'
     | '/app/fiscal'
+    | '/app/fornecedores'
     | '/app/ordens'
     | '/app/pdv'
     | '/app/relatorios'
@@ -236,17 +268,20 @@ export interface FileRouteTypes {
     | '/app/'
     | '/api/public/cron/daily-reminders'
     | '/api/public/cron/whatsapp-dispatch'
+    | '/api/public/webhooks/payment'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/app/agenda'
+    | '/app/assinatura'
     | '/app/clientes'
     | '/app/configuracoes'
     | '/app/elevadores'
     | '/app/estoque'
     | '/app/financeiro'
     | '/app/fiscal'
+    | '/app/fornecedores'
     | '/app/ordens'
     | '/app/pdv'
     | '/app/relatorios'
@@ -257,6 +292,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/api/public/cron/daily-reminders'
     | '/api/public/cron/whatsapp-dispatch'
+    | '/api/public/webhooks/payment'
   id:
     | '__root__'
     | '/'
@@ -264,12 +300,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/app'
     | '/_authenticated/app/agenda'
+    | '/_authenticated/app/assinatura'
     | '/_authenticated/app/clientes'
     | '/_authenticated/app/configuracoes'
     | '/_authenticated/app/elevadores'
     | '/_authenticated/app/estoque'
     | '/_authenticated/app/financeiro'
     | '/_authenticated/app/fiscal'
+    | '/_authenticated/app/fornecedores'
     | '/_authenticated/app/ordens'
     | '/_authenticated/app/pdv'
     | '/_authenticated/app/relatorios'
@@ -280,6 +318,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/'
     | '/api/public/cron/daily-reminders'
     | '/api/public/cron/whatsapp-dispatch'
+    | '/api/public/webhooks/payment'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -288,6 +327,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ApiPublicCronDailyRemindersRoute: typeof ApiPublicCronDailyRemindersRoute
   ApiPublicCronWhatsappDispatchRoute: typeof ApiPublicCronWhatsappDispatchRoute
+  ApiPublicWebhooksPaymentRoute: typeof ApiPublicWebhooksPaymentRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -376,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppOrdensRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/fornecedores': {
+      id: '/_authenticated/app/fornecedores'
+      path: '/fornecedores'
+      fullPath: '/app/fornecedores'
+      preLoaderRoute: typeof AuthenticatedAppFornecedoresRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/fiscal': {
       id: '/_authenticated/app/fiscal'
       path: '/fiscal'
@@ -418,12 +465,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppClientesRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/assinatura': {
+      id: '/_authenticated/app/assinatura'
+      path: '/assinatura'
+      fullPath: '/app/assinatura'
+      preLoaderRoute: typeof AuthenticatedAppAssinaturaRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/agenda': {
       id: '/_authenticated/app/agenda'
       path: '/agenda'
       fullPath: '/app/agenda'
       preLoaderRoute: typeof AuthenticatedAppAgendaRouteImport
       parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/api/public/webhooks/payment': {
+      id: '/api/public/webhooks/payment'
+      path: '/api/public/webhooks/payment'
+      fullPath: '/api/public/webhooks/payment'
+      preLoaderRoute: typeof ApiPublicWebhooksPaymentRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/cron/whatsapp-dispatch': {
       id: '/api/public/cron/whatsapp-dispatch'
@@ -444,12 +505,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAppRouteChildren {
   AuthenticatedAppAgendaRoute: typeof AuthenticatedAppAgendaRoute
+  AuthenticatedAppAssinaturaRoute: typeof AuthenticatedAppAssinaturaRoute
   AuthenticatedAppClientesRoute: typeof AuthenticatedAppClientesRoute
   AuthenticatedAppConfiguracoesRoute: typeof AuthenticatedAppConfiguracoesRoute
   AuthenticatedAppElevadoresRoute: typeof AuthenticatedAppElevadoresRoute
   AuthenticatedAppEstoqueRoute: typeof AuthenticatedAppEstoqueRoute
   AuthenticatedAppFinanceiroRoute: typeof AuthenticatedAppFinanceiroRoute
   AuthenticatedAppFiscalRoute: typeof AuthenticatedAppFiscalRoute
+  AuthenticatedAppFornecedoresRoute: typeof AuthenticatedAppFornecedoresRoute
   AuthenticatedAppOrdensRoute: typeof AuthenticatedAppOrdensRoute
   AuthenticatedAppPdvRoute: typeof AuthenticatedAppPdvRoute
   AuthenticatedAppRelatoriosRoute: typeof AuthenticatedAppRelatoriosRoute
@@ -462,12 +525,14 @@ interface AuthenticatedAppRouteChildren {
 
 const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppAgendaRoute: AuthenticatedAppAgendaRoute,
+  AuthenticatedAppAssinaturaRoute: AuthenticatedAppAssinaturaRoute,
   AuthenticatedAppClientesRoute: AuthenticatedAppClientesRoute,
   AuthenticatedAppConfiguracoesRoute: AuthenticatedAppConfiguracoesRoute,
   AuthenticatedAppElevadoresRoute: AuthenticatedAppElevadoresRoute,
   AuthenticatedAppEstoqueRoute: AuthenticatedAppEstoqueRoute,
   AuthenticatedAppFinanceiroRoute: AuthenticatedAppFinanceiroRoute,
   AuthenticatedAppFiscalRoute: AuthenticatedAppFiscalRoute,
+  AuthenticatedAppFornecedoresRoute: AuthenticatedAppFornecedoresRoute,
   AuthenticatedAppOrdensRoute: AuthenticatedAppOrdensRoute,
   AuthenticatedAppPdvRoute: AuthenticatedAppPdvRoute,
   AuthenticatedAppRelatoriosRoute: AuthenticatedAppRelatoriosRoute,
@@ -499,7 +564,18 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ApiPublicCronDailyRemindersRoute: ApiPublicCronDailyRemindersRoute,
   ApiPublicCronWhatsappDispatchRoute: ApiPublicCronWhatsappDispatchRoute,
+  ApiPublicWebhooksPaymentRoute: ApiPublicWebhooksPaymentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

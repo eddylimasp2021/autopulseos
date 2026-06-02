@@ -279,6 +279,80 @@ export type Database = {
           },
         ]
       }
+      fornecedores: {
+        Row: {
+          id: string
+          workshop_id: string
+          nome_fantasia: string
+          razao_social: string | null
+          cnpj_cpf: string | null
+          inscricao_estadual: string | null
+          email: string | null
+          telefone: string | null
+          celular: string | null
+          cep: string | null
+          endereco: string | null
+          numero: string | null
+          bairro: string | null
+          cidade: string | null
+          estado: string | null
+          observacoes: string | null
+          status: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workshop_id: string
+          nome_fantasia: string
+          razao_social?: string | null
+          cnpj_cpf?: string | null
+          inscricao_estadual?: string | null
+          email?: string | null
+          telefone?: string | null
+          celular?: string | null
+          cep?: string | null
+          endereco?: string | null
+          numero?: string | null
+          bairro?: string | null
+          cidade?: string | null
+          estado?: string | null
+          observacoes?: string | null
+          status?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workshop_id?: string
+          nome_fantasia?: string
+          razao_social?: string | null
+          cnpj_cpf?: string | null
+          inscricao_estadual?: string | null
+          email?: string | null
+          telefone?: string | null
+          celular?: string | null
+          cep?: string | null
+          endereco?: string | null
+          numero?: string | null
+          bairro?: string | null
+          cidade?: string | null
+          estado?: string | null
+          observacoes?: string | null
+          status?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fornecedores_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ordens_servico: {
         Row: {
           cliente_id: string
