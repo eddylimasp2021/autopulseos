@@ -2,12 +2,14 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, Car, ClipboardList, Droplet, Package,
   ShoppingCart, Wallet, BarChart3, Calendar, MessageCircle, Settings, Zap, Wrench,
-  Receipt,
+  Receipt, Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getWorkshop } from "@/lib/configuracoes.functions";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 type Item = { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean };
 const items: Item[] = [
@@ -31,7 +33,17 @@ export function AppSidebar() {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const fnGetW = useServerFn(getWorkshop);
   const { data: workshop } = useQuery({ queryKey: ["workshop"], queryFn: () => fnGetW() });
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        setUserEmail(data.user.email ?? null);
+      }
+    });
+  }, []);
+
+  const isCreator = userEmail === "eddylimainformatica@gmail.com";
   const plan = workshop?.plan || "trial";
   const isTrial = plan === "trial";
   
@@ -87,35 +99,53 @@ export function AppSidebar() {
           );
         })}
       </nav>
-      <div className="m-3 rounded-xl glass p-4">
-        <div className="text-xs text-muted-foreground">Plano</div>
-        <div className="font-display text-sm font-semibold text-foreground">
-          {isTrial ? (
-            diasRestantes > 0 ? `Trial · ${diasRestantes} ${diasRestantes === 1 ? 'dia' : 'dias'}` : "Trial · Expirado"
-          ) : (
-            `Plano ${planNames[plan] || plan}`
+
+      {isCreator ? (
+        <div className="m-3 rounded-xl glass p-4 border border-primary/20 bg-primary/5">
+          <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <Shield className="h-3.5 w-3.5 text-primary" /> Perfil Criador
+          </div>
+          <div className="font-display text-sm font-semibold text-foreground mt-1">
+            Administrador Geral
+          </div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+            <div className="h-full w-full rounded-full bg-[image:var(--gradient-neon)] shadow-[0_0_8px_oklch(0.6_0.25_140)]" />
+          </div>
+          <div className="mt-1.5 text-[9px] text-neon-foreground font-medium uppercase tracking-wider">
+            Acesso Ilimitado
+          </div>
+        </div>
+      ) : (
+        <div className="m-3 rounded-xl glass p-4">
+          <div className="text-xs text-muted-foreground">Plano</div>
+          <div className="font-display text-sm font-semibold text-foreground">
+            {isTrial ? (
+              diasRestantes > 0 ? `Trial · ${diasRestantes} ${diasRestantes === 1 ? 'dia' : 'dias'}` : "Trial · Expirado"
+            ) : (
+              `Plano ${planNames[plan] || plan}`
+            )}
+          </div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+            <div 
+              style={{ width: `${percentage}%` }}
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                isTrial && diasRestantes <= 3 ? "bg-destructive shadow-[0_0_8px_currentColor]" : "bg-[image:var(--gradient-neon)]"
+              )} 
+            />
+          </div>
+          {isTrial && diasRestantes <= 3 && (
+            <div className="mt-1.5 text-[9px] text-destructive font-medium animate-pulse">
+              {diasRestantes === 0 ? "Sua avaliação terminou!" : "Seu trial está prestes a expirar!"}
+            </div>
+          )}
+          {!isTrial && (
+            <div className="mt-1 text-[9px] text-emerald-400 font-medium">
+              Assinatura Ativa
+            </div>
           )}
         </div>
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-          <div 
-            style={{ width: `${percentage}%` }}
-            className={cn(
-              "h-full rounded-full transition-all duration-500",
-              isTrial && diasRestantes <= 3 ? "bg-destructive shadow-[0_0_8px_currentColor]" : "bg-[image:var(--gradient-neon)]"
-            )} 
-          />
-        </div>
-        {isTrial && diasRestantes <= 3 && (
-          <div className="mt-1.5 text-[9px] text-destructive font-medium animate-pulse">
-            {diasRestantes === 0 ? "Sua avaliação terminou!" : "Seu trial está prestes a expirar!"}
-          </div>
-        )}
-        {!isTrial && (
-          <div className="mt-1 text-[9px] text-emerald-400 font-medium">
-            Assinatura Ativa
-          </div>
-        )}
-      </div>
+      )}
     </aside>
   );
 }
