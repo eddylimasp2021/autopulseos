@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { listMensagens, getConfig, upsertConfig } from "@/lib/whatsapp.functions";
+import { getConfig, upsertConfig, listMensagens } from "@/lib/whatsapp.functions";
 import { getWorkshop } from "@/lib/configuracoes.functions";
+import { Route as AuthRoute } from "@/routes/_authenticated";
 
 export const Route = createFileRoute("/_authenticated/app/whatsapp")({ component: Page });
 
@@ -33,8 +34,11 @@ function Page() {
   const upsert = useServerFn(upsertConfig);
   const fnGetW = useServerFn(getWorkshop);
 
+  const authData = AuthRoute.useLoaderData();
+  const isSuperAdmin = authData?.isSuperAdmin || authData?.email === "eddylimainformatica@gmail.com";
+
   const { data: workshop } = useQuery({ queryKey: ["workshop"], queryFn: () => fnGetW() });
-  const isOwnerOrAdmin = workshop?.role === "owner" || workshop?.role === "admin";
+  const isOwnerOrAdmin = workshop?.role?.toLowerCase() === "owner" || workshop?.role?.toLowerCase() === "admin" || isSuperAdmin;
 
   const { data: msgs = [], isLoading } = useQuery({ queryKey: ["wa-msgs"], queryFn: () => listMsgs() });
   const { data: cfg } = useQuery({ 

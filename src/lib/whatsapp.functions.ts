@@ -50,7 +50,16 @@ export async function verifyIsOwnerOrAdmin(supabase: any, userId?: string) {
   const role = data?.role;
   const workshopId = data?.workshop_id;
 
-  if (role !== "owner" && role !== "admin") {
+  const { data: superAdminData } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "super_admin")
+    .maybeSingle();
+
+  const isSuperAdmin = !!superAdminData;
+
+  if (role !== "owner" && role !== "admin" && !isSuperAdmin) {
     await logSecurityEvent(
       supabase,
       userId,
@@ -59,8 +68,9 @@ export async function verifyIsOwnerOrAdmin(supabase: any, userId?: string) {
       "warning",
       { user_role: role ?? "none", attempted_action: "manage_whatsapp_config" }
     );
-    throw new Error("Permissão negada. Apenas administradores ou proprietários podem gerenciar o WhatsApp.");
+    throw new Error("Acesso negado. Apenas proprietários ou administradores podem gerenciar essa configuração.");
   }
+
   return workshopId;
 }
 
