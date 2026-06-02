@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, Building, CreditCard, Search, Edit3, Calendar,
   AlertTriangle, Lock, Unlock, ArrowUpRight, HelpCircle, Loader2, CheckCircle2,
-  Trash2
+  Trash2, Save, Server
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,10 +12,11 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { listWorkshopsAdmin, updateWorkshopPlanAdmin } from "@/lib/saas.functions";
+import { listWorkshopsAdmin, updateWorkshopPlanAdmin, getSaasConfigAdmin, updateSaasConfigAdmin } from "@/lib/saas.functions";
 
 export const Route = createFileRoute("/_authenticated/app/saas")({ component: Page });
 
@@ -49,9 +50,29 @@ function Page() {
     queryFn: () => getWorkshops(),
   });
 
+  const getSaasConfig = useServerFn(getSaasConfigAdmin);
+  const updateSaasConfig = useServerFn(updateSaasConfigAdmin);
+
+  const { data: saasConfig } = useQuery({
+    queryKey: ["saas-config"],
+    queryFn: () => getSaasConfig()
+  });
+
+  React.useEffect(() => {
+    if (saasConfig) {
+      setAsaasApiKey(saasConfig.asaas_api_key || "");
+      setAsaasWebhookSecret(saasConfig.asaas_webhook_secret || "");
+    }
+  }, [saasConfig]);
+
   // State
+  const [activeTab, setActiveTab] = useState("clientes");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>("all");
+  
+  // Saas Config State
+  const [asaasApiKey, setAsaasApiKey] = useState("");
+  const [asaasWebhookSecret, setAsaasWebhookSecret] = useState("");
   
   // Dialog State
   const [editOpen, setEditOpen] = useState(false);
@@ -70,6 +91,18 @@ function Page() {
     },
     onError: (err: any) => {
       toast.error(`Falha ao atualizar plano: ${err.message}`);
+    }
+  });
+
+  const mUpdateConfig = useMutation({
+    mutationFn: (payload: { asaas_api_key: string; asaas_webhook_secret: string }) => 
+      updateSaasConfig({ data: payload }),
+    onSuccess: () => {
+      toast.success("Configurações do Gateway atualizadas!");
+      qc.invalidateQueries({ queryKey: ["saas-config"] });
+    },
+    onError: (err: any) => {
+      toast.error(`Falha ao salvar: ${err.message}`);
     }
   });
 
@@ -204,7 +237,17 @@ function Page() {
       </div>
 
       {/* Main Panel Box */}
-      <div className="glass rounded-2xl p-6 border border-border/40 space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="bg-secondary/40 border border-border/40 p-1 rounded-xl w-full sm:w-auto overflow-x-auto justify-start">
+          <TabsTrigger value="clientes" className="gap-2 rounded-lg text-xs md:text-sm">
+            <Building className="h-4 w-4" /> Oficinas e Clientes
+          </TabsTrigger>
+          <TabsTrigger value="gateway" className="gap-2 rounded-lg text-xs md:text-sm">
+            <CreditCard className="h-4 w-4" /> Gateway de Pagamento
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="clientes" className="glass rounded-2xl p-6 border border-border/40 space-y-4">
         {/* Search & Filter Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-wrap gap-1.5">
@@ -345,7 +388,70 @@ function Page() {
             </table>
           </div>
         )}
-      </div>
+        </TabsContent>
+
+        <TabsContent value="gateway" className="mt-0">
+          <div className="glass rounded-2xl p-6 border border-border/40 space-y-6 max-w-3xl">
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-primary" /> Gateway de Pagamento (Asaas)
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Configure as chaves da API do Asaas para permitir que o AutoPulseOS identifique pagamentos aprovados e libere as oficinas automaticamente via Webhook.
+              </p>
+            </div>
+
+            <div className="space-y-4 bg-secondary/20 p-5 rounded-xl border border-border/50">
+              <div className="space-y-2">
+                <Label htmlFor="asaas_api_key" className="text-sm font-semibold">Asaas API Key ($aact_...)</Label>
+                <Input 
+                  id="asaas_api_key" 
+                  value={asaasApiKey} 
+                  onChange={e => setAsaasApiKey(e.target.value)} 
+                  placeholder="Insira a chave de API do Asaas..." 
+                  className="font-mono text-xs bg-secondary/40"
+                />
+                <p className="text-[10px] text-muted-foreground">Esta chave será usada pelo AutoPulseOS para enviar ordens e criar assinaturas (futuramente).</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="asaas_webhook_secret" className="text-sm font-semibold">Webhook Access Token / Secret</Label>
+                <Input 
+                  id="asaas_webhook_secret" 
+                  value={asaasWebhookSecret} 
+                  onChange={e => setAsaasWebhookSecret(e.target.value)} 
+                  placeholder="Insira o Token de acesso do Webhook..." 
+                  className="font-mono text-xs bg-secondary/40"
+                />
+                <p className="text-[10px] text-muted-foreground">Token usado para validar se a requisição do webhook veio realmente do Asaas.</p>
+              </div>
+
+              <div className="pt-4 flex justify-end">
+                <Button 
+                  onClick={() => mUpdateConfig.mutate({ asaas_api_key: asaasApiKey, asaas_webhook_secret: asaasWebhookSecret })}
+                  disabled={mUpdateConfig.isPending}
+                >
+                  {mUpdateConfig.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                  Salvar Gateway
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl space-y-3">
+              <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
+                <Server className="h-4 w-4" /> Configuração do Webhook no Asaas
+              </h3>
+              <p className="text-xs text-blue-400/80 leading-relaxed">
+                No painel do Asaas, acesse <strong>Minha Conta &gt; Integração &gt; Webhooks</strong> e crie um webhook para <strong>Cobranças</strong>. Utilize a URL abaixo. Ative os eventos de <em>Pagamento Confirmado/Recebido</em>. O Access Token que o Asaas gerar deve ser colado no campo acima.
+              </p>
+              <div className="bg-background/50 p-2 rounded border border-blue-500/20 font-mono text-xs text-foreground flex justify-between items-center">
+                <span className="select-all">https://sua-url-do-sistema.com/api/public/webhooks/payment</span>
+              </div>
+            </div>
+
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Plan Edit Modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

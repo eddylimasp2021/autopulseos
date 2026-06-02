@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, Car, ClipboardList, Droplet, Package,
   ShoppingCart, Wallet, BarChart3, Calendar, MessageCircle, Settings, Zap, Wrench,
-  Receipt, Shield,
+  Receipt, Shield, Star
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -26,6 +26,7 @@ const items: Item[] = [
   { to: "/app/relatorios", label: "Relatórios", icon: BarChart3 },
   { to: "/app/agenda", label: "Agenda", icon: Calendar },
   { to: "/app/whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { to: "/app/assinatura", label: "Meu Plano", icon: Star },
   { to: "/app/configuracoes", label: "Configurações", icon: Settings },
 ];
 

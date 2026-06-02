@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/app/AppSidebar";
 import { Topbar } from "@/components/app/Topbar";
 import { AppFooter } from "@/components/app/AppFooter";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { SubscriptionGuard } from "@/components/app/SubscriptionGuard";
 
 const getAuthenticatedLayoutData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -17,9 +18,18 @@ const getAuthenticatedLayoutData = createServerFn({ method: "GET" })
       .eq("id", userId)
       .maybeSingle();
 
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "super_admin")
+      .maybeSingle();
+
     return {
       userId,
+      email: claims?.email,
       fullName: profile?.full_name ?? claims.user_metadata?.full_name ?? null,
+      isSuperAdmin: !!roleData
     };
   });
 
@@ -35,7 +45,7 @@ export const Route = createFileRoute("/_authenticated")({
       return await getAuthenticatedLayoutData();
     } catch (e) {
       console.warn("Auth layout loader failed, using client fallback", e);
-      return { userId: null, fullName: null };
+      return { userId: null, email: null, fullName: null, isSuperAdmin: false };
     }
   },
   component: AuthLayout,
@@ -45,7 +55,8 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthLayout() {
   const { user } = Route.useRouteContext();
-  const { fullName } = Route.useLoaderData();
+  const { fullName, email, isSuperAdmin } = Route.useLoaderData();
+  const isCreator = isSuperAdmin || email === "eddylimainformatica@gmail.com";
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -53,7 +64,9 @@ function AuthLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar userName={fullName ?? user.user_metadata?.full_name} />
         <main className="flex-1 p-6 lg:p-8">
-          <Outlet />
+          <SubscriptionGuard isCreator={isCreator}>
+            <Outlet />
+          </SubscriptionGuard>
         </main>
         <AppFooter />
       </div>

@@ -125,3 +125,44 @@ export const listWorkshopsAdmin = createServerFn({ method: "GET" }).handler(list
 export const updateWorkshopPlanAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: UpdatePlanInputType) => UpdatePlanInput.parse(d))
   .handler(updateWorkshopPlanAdminHandler);
+
+export const getSaasConfigAdminHandler = async ({ context }: { context: any }) => {
+  await checkSuperAdmin(context);
+
+  const { data, error } = await supabaseAdmin
+    .from("saas_config")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data || { asaas_api_key: "", asaas_webhook_secret: "" };
+};
+
+const UpdateSaasConfigInput = z.object({
+  asaas_api_key: z.string().optional().nullable(),
+  asaas_webhook_secret: z.string().optional().nullable()
+});
+
+export const updateSaasConfigAdminHandler = async ({ data, context }: { data: z.infer<typeof UpdateSaasConfigInput>; context: any }) => {
+  await checkSuperAdmin(context);
+
+  const payload = {
+    asaas_api_key: data.asaas_api_key,
+    asaas_webhook_secret: data.asaas_webhook_secret,
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabaseAdmin
+    .from("saas_config")
+    .upsert({ id: 1, ...payload });
+
+  if (error) throw new Error(error.message);
+  return { ok: true };
+};
+
+export const getSaasConfigAdmin = createServerFn({ method: "GET" }).handler(getSaasConfigAdminHandler);
+export const updateSaasConfigAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: z.infer<typeof UpdateSaasConfigInput>) => UpdateSaasConfigInput.parse(d))
+  .handler(updateSaasConfigAdminHandler);
+ 
