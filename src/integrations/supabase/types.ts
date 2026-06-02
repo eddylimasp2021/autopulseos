@@ -78,6 +78,7 @@ export type Database = {
           created_at: string
           fornecedor: string | null
           id: string
+          imagem_url: string | null
           nome: string
           observacoes: string | null
           preco_custo: number
@@ -95,6 +96,7 @@ export type Database = {
           created_at?: string
           fornecedor?: string | null
           id?: string
+          imagem_url?: string | null
           nome: string
           observacoes?: string | null
           preco_custo?: number
@@ -112,6 +114,7 @@ export type Database = {
           created_at?: string
           fornecedor?: string | null
           id?: string
+          imagem_url?: string | null
           nome?: string
           observacoes?: string | null
           preco_custo?: number
@@ -192,6 +195,7 @@ export type Database = {
       }
       financeiro_lancamentos: {
         Row: {
+          caixa_id: string | null
           categoria: string | null
           cliente_id: string | null
           created_at: string
@@ -209,6 +213,7 @@ export type Database = {
           workshop_id: string
         }
         Insert: {
+          caixa_id?: string | null
           categoria?: string | null
           cliente_id?: string | null
           created_at?: string
@@ -226,6 +231,7 @@ export type Database = {
           workshop_id: string
         }
         Update: {
+          caixa_id?: string | null
           categoria?: string | null
           cliente_id?: string | null
           created_at?: string
@@ -243,6 +249,13 @@ export type Database = {
           workshop_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "financeiro_lancamentos_caixa_id_fkey"
+            columns: ["caixa_id"]
+            isOneToOne: false
+            referencedRelation: "pdv_caixas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "financeiro_lancamentos_cliente_id_fkey"
             columns: ["cliente_id"]
@@ -266,157 +279,6 @@ export type Database = {
           },
         ]
       }
-      fiscal_config: {
-        Row: {
-          id: string
-          workshop_id: string
-          cnpj: string | null
-          razao_social: string | null
-          nome_fantasia: string | null
-          inscricao_estadual: string | null
-          inscricao_municipal: string | null
-          regime_tributario: string | null
-          cnae: string | null
-          ambiente: string
-          certificado_base64: string | null
-          certificado_senha: string | null
-          certificado_nome_arquivo: string | null
-          nfce_serie: number
-          nfce_ultimo_numero: number
-          nfce_csc_id: string | null
-          nfce_csc_token: string | null
-          nfe_serie: number
-          nfe_ultimo_numero: number
-          nfse_serie: number
-          nfse_ultimo_numero: number
-          api_provider: string | null
-          api_token: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          workshop_id: string
-          cnpj?: string | null
-          razao_social?: string | null
-          nome_fantasia?: string | null
-          inscricao_estadual?: string | null
-          inscricao_municipal?: string | null
-          regime_tributario?: string | null
-          cnae?: string | null
-          ambiente?: string
-          certificado_base64?: string | null
-          certificado_senha?: string | null
-          certificado_nome_arquivo?: string | null
-          nfce_serie?: number
-          nfce_ultimo_numero?: number
-          nfce_csc_id?: string | null
-          nfce_csc_token?: string | null
-          nfe_serie?: number
-          nfe_ultimo_numero?: number
-          nfse_serie?: number
-          nfse_ultimo_numero?: number
-          api_provider?: string | null
-          api_token?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          workshop_id?: string
-          cnpj?: string | null
-          razao_social?: string | null
-          nome_fantasia?: string | null
-          inscricao_estadual?: string | null
-          inscricao_municipal?: string | null
-          regime_tributario?: string | null
-          cnae?: string | null
-          ambiente?: string
-          certificado_base64?: string | null
-          certificado_senha?: string | null
-          certificado_nome_arquivo?: string | null
-          nfce_serie?: number
-          nfce_ultimo_numero?: number
-          nfce_csc_id?: string | null
-          nfce_csc_token?: string | null
-          nfe_serie?: number
-          nfe_ultimo_numero?: number
-          nfse_serie?: number
-          nfse_ultimo_numero?: number
-          api_provider?: string | null
-          api_token?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fiscal_config_workshop_id_fkey"
-            columns: ["workshop_id"]
-            isOneToOne: false
-            referencedRelation: "workshops"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      fiscal_xmls: {
-        Row: {
-          id: string
-          workshop_id: string
-          tipo: "nfe_emitida" | "nfce_emitida" | "nfe_importada"
-          chave: string
-          numero: number
-          serie: number
-          data_emissao: string
-          valor_total: number
-          xml_content: string
-          xml_filename: string
-          destinatario_nome: string | null
-          destinatario_documento: string | null
-          status: "autorizada" | "cancelada" | "importada"
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          workshop_id: string
-          tipo: "nfe_emitida" | "nfce_emitida" | "nfe_importada"
-          chave: string
-          numero: number
-          serie: number
-          data_emissao: string
-          valor_total?: number
-          xml_content: string
-          xml_filename: string
-          destinatario_nome?: string | null
-          destinatario_documento?: string | null
-          status?: "autorizada" | "cancelada" | "importada"
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          workshop_id?: string
-          tipo?: "nfe_emitida" | "nfce_emitida" | "nfe_importada"
-          chave?: string
-          numero?: number
-          serie?: number
-          data_emissao?: string
-          valor_total?: number
-          xml_content?: string
-          xml_filename?: string
-          destinatario_nome?: string | null
-          destinatario_documento?: string | null
-          status?: "autorizada" | "cancelada" | "importada"
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fiscal_xmls_workshop_id_fkey"
-            columns: ["workshop_id"]
-            isOneToOne: false
-            referencedRelation: "workshops"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
       ordens_servico: {
         Row: {
           cliente_id: string
@@ -427,6 +289,7 @@ export type Database = {
           desconto: number
           descricao: string | null
           diagnostico: string | null
+          elevador: number | null
           id: string
           km_entrada: number | null
           mecanico_id: string | null
@@ -447,6 +310,7 @@ export type Database = {
           desconto?: number
           descricao?: string | null
           diagnostico?: string | null
+          elevador?: number | null
           id?: string
           km_entrada?: number | null
           mecanico_id?: string | null
@@ -467,6 +331,7 @@ export type Database = {
           desconto?: number
           descricao?: string | null
           diagnostico?: string | null
+          elevador?: number | null
           id?: string
           km_entrada?: number | null
           mecanico_id?: string | null
@@ -552,6 +417,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pdv_caixas: {
+        Row: {
+          data_abertura: string
+          data_fechamento: string | null
+          id: string
+          observacoes: string | null
+          operador_nome: string
+          saldo_abertura: number
+          saldo_fechamento: number | null
+          status: string
+          workshop_id: string
+        }
+        Insert: {
+          data_abertura?: string
+          data_fechamento?: string | null
+          id?: string
+          observacoes?: string | null
+          operador_nome: string
+          saldo_abertura?: number
+          saldo_fechamento?: number | null
+          status?: string
+          workshop_id: string
+        }
+        Update: {
+          data_abertura?: string
+          data_fechamento?: string | null
+          id?: string
+          observacoes?: string | null
+          operador_nome?: string
+          saldo_abertura?: number
+          saldo_fechamento?: number | null
+          status?: string
+          workshop_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -756,13 +657,6 @@ export type Database = {
       whatsapp_config: {
         Row: {
           ativo: boolean
-          callboot_ativo: boolean
-          callboot_instance_url: string | null
-          callboot_template_cobranca: string | null
-          callboot_template_lembrete_oleo: string | null
-          callboot_template_os_concluida: string | null
-          callboot_template_os_entregue: string | null
-          callboot_token: string | null
           created_at: string
           instance_url: string | null
           template_cobranca: string | null
@@ -775,13 +669,6 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
-          callboot_ativo?: boolean
-          callboot_instance_url?: string | null
-          callboot_template_cobranca?: string | null
-          callboot_template_lembrete_oleo?: string | null
-          callboot_template_os_concluida?: string | null
-          callboot_template_os_entregue?: string | null
-          callboot_token?: string | null
           created_at?: string
           instance_url?: string | null
           template_cobranca?: string | null
@@ -794,13 +681,6 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
-          callboot_ativo?: boolean
-          callboot_instance_url?: string | null
-          callboot_template_cobranca?: string | null
-          callboot_template_lembrete_oleo?: string | null
-          callboot_template_os_concluida?: string | null
-          callboot_template_os_entregue?: string | null
-          callboot_token?: string | null
           created_at?: string
           instance_url?: string | null
           template_cobranca?: string | null
@@ -829,7 +709,6 @@ export type Database = {
           evento: string | null
           id: string
           mensagem: string
-          provedor: string
           ref_id: string | null
           ref_tipo: string | null
           status: Database["public"]["Enums"]["whatsapp_msg_status"]
@@ -845,7 +724,6 @@ export type Database = {
           evento?: string | null
           id?: string
           mensagem: string
-          provedor?: string
           ref_id?: string | null
           ref_tipo?: string | null
           status?: Database["public"]["Enums"]["whatsapp_msg_status"]
@@ -861,7 +739,6 @@ export type Database = {
           evento?: string | null
           id?: string
           mensagem?: string
-          provedor?: string
           ref_id?: string | null
           ref_tipo?: string | null
           status?: Database["public"]["Enums"]["whatsapp_msg_status"]
