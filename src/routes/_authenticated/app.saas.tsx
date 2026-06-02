@@ -177,6 +177,31 @@ function Page() {
       </motion.div>
 
       {/* KPI Cards */}
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border/40">
+        {[
+          { key: "clientes" as const, label: "Clientes & Planos", icon: Users },
+          { key: "gateway" as const, label: "Gateway de Pagamento", icon: Wallet },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition",
+              activeTab === t.key
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <t.icon className="h-4 w-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "gateway" ? (
+        <GatewayTab />
+      ) : (
+      <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Total de Oficinas", value: stats.total, icon: Building, color: "text-primary" },
