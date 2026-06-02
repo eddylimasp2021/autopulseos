@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { imprimirCupomNaoFiscal, imprimirAberturaCaixa, imprimirFechamentoCaixa } from "@/lib/print";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ContadorMoedas } from "@/components/app/ContadorMoedas";
 
 export const Route = createFileRoute("/_authenticated/app/pdv")({ component: Page });
 
@@ -309,6 +310,7 @@ function Page() {
                 placeholder="Ex: 50,00"
                 className="mt-2 w-full rounded-xl border border-input bg-background/50 px-4 py-3 text-lg tabular-nums outline-none focus:ring-2 focus:ring-primary/40 transition"
               />
+              <ContadorMoedas onConfirm={(val) => setSaldoAbertura(val.toFixed(2).replace('.', ','))} />
             </div>
             <button 
               onClick={() => mAbrir.mutate()}
@@ -422,6 +424,7 @@ function Page() {
                     className="pl-8 bg-secondary/35 text-sm font-semibold"
                   />
                 </div>
+                <ContadorMoedas onConfirm={(val) => setSaldoFechamentoInformado(val.toFixed(2).replace('.', ','))} />
                 {saldoFechamentoInformado && (
                   <div className="text-[11px] font-semibold mt-1">
                     {(() => {
@@ -683,7 +686,10 @@ function Page() {
                         className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm text-right tabular-nums outline-none focus:ring-1 focus:ring-primary/30"
                       />
                     </div>
-                    <div className="flex justify-between text-xs pt-1">
+                    <div className="pt-1">
+                      <ContadorMoedas onConfirm={(val) => setRecebidoStr(val.toFixed(2).replace('.', ','))} />
+                    </div>
+                    <div className="flex justify-between text-xs pt-1 mt-1">
                       {faltaReceber > 0 ? (
                         <>
                           <span className="text-amber-500">Falta receber</span>
