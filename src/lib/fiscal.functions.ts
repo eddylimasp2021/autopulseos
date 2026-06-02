@@ -35,6 +35,12 @@ const FiscalConfigInput = z.object({
 });
 export type FiscalConfigInputType = z.infer<typeof FiscalConfigInput>;
 
+const ParcelaInput = z.object({
+  numero: z.string(),
+  vencimento: z.string(),
+  valor: z.coerce.number()
+});
+
 const XMLInput = z.object({
   tipo: z.enum(["nfe_emitida", "nfce_emitida", "nfe_importada"]),
   chave: z.string().length(44, "A chave de acesso deve conter exatamente 44 dígitos"),
@@ -47,6 +53,8 @@ const XMLInput = z.object({
   destinatario_nome: z.string().optional().nullable(),
   destinatario_documento: z.string().optional().nullable(),
   status: z.enum(["autorizada", "cancelada", "importada"]).default("autorizada"),
+  parcelas: z.array(ParcelaInput).optional(),
+  cadastrar_contas_pagar: z.boolean().optional().default(true),
 });
 export type XMLInputType = z.infer<typeof XMLInput>;
 
@@ -275,6 +283,52 @@ export async function saveFiscalXMLHandler({ data, context }: { data: XMLInputTy
     "info",
     { xml_id: row.id, chave: data.chave, numero: data.numero, serie: data.serie }
   );
+
+  // Cadastro automático no Financeiro
+  if (data.cadastrar_contas_pagar && data.tipo === "nfe_importada") {
+    try {
+      if (data.parcelas && data.parcelas.length > 0) {
+        const inserts = data.parcelas.map(p => ({
+          workshop_id: workshopId,
+          tipo: "despesa",
+          categoria: "Compra de Mercadoria",
+          descricao: `NF-e #${data.numero} - Parcela ${p.numero}`,
+          valor: p.valor,
+          data_vencimento: p.vencimento.slice(0, 10), // Garante YYYY-MM-DD
+          forma_pagamento: "boleto",
+          status: "pendente",
+          observacoes: `Gerado a partir do XML chave: ${data.chave}`
+        }));
+        const { error: errFinanceiro } = await supabase
+          .from("financeiro_lancamentos")
+          .insert(inserts);
+        if (errFinanceiro) {
+          console.error(`[FISCAL FUNCTION] Falha ao cadastrar parcelas no financeiro: ${errFinanceiro.message}`);
+        }
+      } else {
+        // Cria despesa única com o valor total
+        const vencimentoUnico = data.data_emissao ? data.data_emissao.slice(0, 10) : new Date().toISOString().slice(0, 10);
+        const { error: errFinanceiro } = await supabase
+          .from("financeiro_lancamentos")
+          .insert({
+            workshop_id: workshopId,
+            tipo: "despesa",
+            categoria: "Compra de Mercadoria",
+            descricao: `NF-e #${data.numero} - Total`,
+            valor: data.valor_total,
+            data_vencimento: vencimentoUnico,
+            forma_pagamento: "boleto",
+            status: "pendente",
+            observacoes: `Gerado a partir do XML chave: ${data.chave}`
+          });
+        if (errFinanceiro) {
+          console.error(`[FISCAL FUNCTION] Falha ao cadastrar parcela única no financeiro: ${errFinanceiro.message}`);
+        }
+      }
+    } catch (e: any) {
+      console.error(`[FISCAL FUNCTION] Erro ao cadastrar despesas no financeiro: ${e.message}`);
+    }
+  }
 
   return row;
 }

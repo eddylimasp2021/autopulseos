@@ -64,6 +64,14 @@ const ApiGatewaySchema = z.object({
 });
 type ApiGatewayFormData = z.infer<typeof ApiGatewaySchema>;
 
+import { Switch } from "@/components/ui/switch";
+
+interface Parcela {
+  numero: string;
+  vencimento: string;
+  valor: number;
+}
+
 interface ParsedXML {
   chave: string;
   numero: number;
@@ -76,6 +84,7 @@ interface ParsedXML {
   destinatario_nome: string;
   destinatario_documento: string;
   status: "autorizada" | "cancelada" | "importada";
+  parcelas?: Parcela[];
   error?: string;
 }
 
@@ -785,6 +794,7 @@ function XmlImportTab({
   deletingXml: boolean;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [cadastrarContasPagar, setCadastrarContasPagar] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFilesSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -841,6 +851,21 @@ function XmlImportTab({
             tipo = mod === "65" ? "nfce_emitida" : "nfe_emitida";
           }
           
+          // Extrair parcelas de cobrança (<dup>)
+          const dupNodes = xmlDoc.getElementsByTagName("dup");
+          const parcelas: Parcela[] = [];
+          if (dupNodes && dupNodes.length > 0) {
+            for (let i = 0; i < dupNodes.length; i++) {
+              const dup = dupNodes[i];
+              const nDup = dup.getElementsByTagName("nDup")?.[0]?.textContent || `${i + 1}`;
+              const dVenc = dup.getElementsByTagName("dVenc")?.[0]?.textContent || "";
+              const vDup = Number(dup.getElementsByTagName("vDup")?.[0]?.textContent || "0");
+              if (dVenc && vDup > 0) {
+                parcelas.push({ numero: nDup, vencimento: dVenc, valor: vDup });
+              }
+            }
+          }
+          
           setParsedFiles(prev => {
             if (prev.some(x => x.chave === chave)) return prev; // Avoid duplicate inside list
             return [
@@ -856,7 +881,8 @@ function XmlImportTab({
                 xml_filename: file.name,
                 destinatario_nome: destNome,
                 destinatario_documento: destDoc,
-                status: tipo === "nfe_importada" ? "importada" : "autorizada"
+                status: tipo === "nfe_importada" ? "importada" : "autorizada",
+                parcelas
               }
             ];
           });
@@ -879,7 +905,12 @@ function XmlImportTab({
     for (const f of parsedFiles) {
       if (f.error) continue;
       try {
-        await saveXmlFn({ data: f });
+        await saveXmlFn({
+          data: {
+            ...f,
+            cadastrar_contas_pagar: cadastrarContasPagar
+          }
+        });
         successQty++;
       } catch (err: any) {
         f.error = err.message || "Erro desconhecido";
@@ -951,6 +982,28 @@ function XmlImportTab({
               <span>Configure o CNPJ na aba ao lado para habilitar a classificação automática de notas emitidas vs importadas.</span>
             </div>
           )}
+
+          {/* Opções de Importação */}
+          <div className="bg-secondary/20 p-4 rounded-xl border border-border/30 space-y-3">
+            <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Settings className="h-3.5 w-3.5 text-muted-foreground" /> Opções de Importação
+            </h4>
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="cadastrar-contas" className="text-xs font-medium cursor-pointer">
+                  Cadastrar contas a pagar
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Gera despesas automaticamente no financeiro a partir das parcelas do XML.
+                </p>
+              </div>
+              <Switch 
+                id="cadastrar-contas" 
+                checked={cadastrarContasPagar} 
+                onCheckedChange={setCadastrarContasPagar} 
+              />
+            </div>
+          </div>
         </div>
 
         {/* Pré-visualização de Arquivos a Importar */}
@@ -993,6 +1046,42 @@ function XmlImportTab({
                     <span>Dest: {f.destinatario_nome}</span>
                     <span>Total: {f.valor_total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
                   </div>
+                  {f.tipo === "nfe_importada" && cadastrarContasPagar && (
+                    <>
+                      {f.parcelas && f.parcelas.length > 0 ? (
+                        <div className="mt-2 space-y-1 bg-background/30 p-2 rounded-lg border border-border/20 max-w-lg">
+                          <div className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                            <Landmark className="h-3 w-3" /> Parcelas para Contas a Pagar:
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {f.parcelas.map((p, pIdx) => {
+                              const dateParts = p.vencimento.split("-");
+                              const formattedDate = dateParts.length === 3 
+                                ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` 
+                                : p.vencimento;
+                              return (
+                                <span 
+                                  key={pIdx} 
+                                  className="inline-flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 text-[9px] px-2 py-0.5 rounded text-emerald-300 font-mono"
+                                >
+                                  <span>#{p.numero}:</span>
+                                  <span className="font-semibold">
+                                    {p.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                  </span>
+                                  <span className="text-muted-foreground">({formattedDate})</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-[10px] text-amber-500/90 flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5 text-amber-500/70" />
+                          <span>Sem parcelas no XML. Será gerada uma única despesa de {f.valor_total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} com vencimento na data de emissão.</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                   {f.error && (
                     <div className="text-[9px] text-red-400 font-semibold mt-1 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3 shrink-0" /> Erro: {f.error}
@@ -1115,7 +1204,7 @@ function XmlImportTab({
                 })}
                 {filteredStored.length === 0 && (
                   <tr>
-                    <td colspan="7" className="p-12 text-center text-muted-foreground text-xs">
+                    <td colSpan={7} className="p-12 text-center text-muted-foreground text-xs">
                       Nenhum documento XML arquivado foi localizado.
                     </td>
                   </tr>
@@ -1261,7 +1350,7 @@ function ContadorTab({
               ))}
               {filteredXmls.length === 0 && (
                 <tr>
-                  <td colspan="7" className="p-12 text-center text-muted-foreground text-xs">
+                  <td colSpan={7} className="p-12 text-center text-muted-foreground text-xs">
                     Nenhum XML armazenado localizado para o mês selecionado.
                   </td>
                 </tr>
