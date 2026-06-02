@@ -372,6 +372,8 @@ function Page() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Plan Edit Modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
