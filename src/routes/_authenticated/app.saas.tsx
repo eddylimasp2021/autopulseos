@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, Building, CreditCard, Search, Edit3, Calendar,
   AlertTriangle, Lock, Unlock, ArrowUpRight, HelpCircle, Loader2, CheckCircle2,
-  Trash2
+  Trash2, Webhook, Wallet, CheckCircle, Zap
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -58,6 +58,7 @@ function Page() {
   const [selectedWorkshop, setSelectedWorkshop] = useState<WorkshopAdmin | null>(null);
   const [newPlan, setNewPlan] = useState<"trial" | "basico" | "profissional" | "premium">("trial");
   const [trialEndsAt, setTrialEndsAt] = useState("");
+  const [activeTab, setActiveTab] = useState<"clientes" | "gateway">("clientes");
 
   // Mutations
   const mUpdatePlan = useMutation({
