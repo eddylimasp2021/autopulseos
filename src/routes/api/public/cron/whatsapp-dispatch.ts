@@ -131,48 +131,22 @@ export const Route = createFileRoute("/api/public/cron/whatsapp-dispatch")({
       // 4. Processar e enviar as mensagens
       for (const msg of mensagens) {
         const config = configMap.get(msg.workshop_id);
-        const isCallboot = msg.provedor === "callboot";
-
-        if (isCallboot) {
-          if (!config || !config.callboot_ativo || !config.callboot_instance_url || !config.callboot_token) {
-            // Marca como falha se oficina não configurou Callboot
-            await supabaseAdmin
-              .from("whatsapp_mensagens")
-              .update({ status: "falhou", erro: "API Callboot não configurada ou inativa para a oficina." })
-              .eq("id", msg.id);
-            results.falhas++;
-            continue;
-          }
-        } else {
-          // UAZAPI (padrão)
-          if (!config || !config.ativo || !config.instance_url || !config.token) {
-            // Marca como falha se oficina não configurou WhatsApp
-            await supabaseAdmin
-              .from("whatsapp_mensagens")
-              .update({ status: "falhou", erro: "WhatsApp não configurado ou inativo para a oficina." })
-              .eq("id", msg.id);
-            results.falhas++;
-            continue;
-          }
+        if (!config || !config.ativo || !config.instance_url || !config.token) {
+          await supabaseAdmin
+            .from("whatsapp_mensagens")
+            .update({ status: "falhou", erro: "WhatsApp não configurado ou inativo para a oficina." })
+            .eq("id", msg.id);
+          results.falhas++;
+          continue;
         }
 
         try {
-          // Tentar enviar a mensagem pelo respectivo canal
-          if (isCallboot) {
-            await sendCallbootMessage(
-              config.callboot_instance_url!,
-              config.callboot_token!,
-              msg.telefone,
-              msg.mensagem
-            );
-          } else {
-            await sendWhatsappMessage(
-              config.instance_url!,
-              config.token!,
-              msg.telefone,
-              msg.mensagem
-            );
-          }
+          await sendWhatsappMessage(
+            config.instance_url!,
+            config.token!,
+            msg.telefone,
+            msg.mensagem
+          );
 
           // Atualizar status no banco
           await supabaseAdmin

@@ -79,6 +79,7 @@ export const listWorkshopsAdminHandler = async ({ context }: { context: any }) =
       trial_ends_at: w.trial_ends_at,
       created_at: w.created_at,
       updated_at: w.updated_at,
+      cnpj: (w as any).cnpj ?? null,
       owner_name: ownerName,
       owner_email: ownerEmail
     };

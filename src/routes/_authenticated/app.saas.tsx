@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, Building, CreditCard, Search, Edit3, Calendar,
   AlertTriangle, Lock, Unlock, ArrowUpRight, HelpCircle, Loader2, CheckCircle2,
-  Trash2, Save, Server
+  Trash2, Save, Server, Webhook, Wallet, CheckCircle, Zap
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +28,7 @@ interface WorkshopAdmin {
   trial_ends_at: string | null;
   created_at: string;
   updated_at: string;
+  cnpj: string | null;
   owner_name: string;
   owner_email: string;
 }
@@ -79,6 +80,7 @@ function Page() {
   const [selectedWorkshop, setSelectedWorkshop] = useState<WorkshopAdmin | null>(null);
   const [newPlan, setNewPlan] = useState<"trial" | "basico" | "profissional" | "premium">("trial");
   const [trialEndsAt, setTrialEndsAt] = useState("");
+  const [activeTab, setActiveTab] = useState<"clientes" | "gateway">("clientes");
 
   // Mutations
   const mUpdatePlan = useMutation({
@@ -138,6 +140,18 @@ function Page() {
     }
   };
 
+  // Quick Action: Change plan directly to a paid tier (basico/profissional/premium)
+  const handleQuickChangePlan = (w: WorkshopAdmin, plan: "basico" | "profissional" | "premium") => {
+    const planLabel = planBadges[plan]?.label || plan;
+    if (window.confirm(`Alterar a oficina "${w.name}" para o ${planLabel}?`)) {
+      mUpdatePlan.mutate({
+        workshop_id: w.id,
+        plan,
+        trial_ends_at: null,
+      });
+    }
+  };
+
   // Submits plan update
   const handleSubmitPlan = (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,7 +189,8 @@ function Page() {
         w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         w.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
         w.owner_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        w.owner_name.toLowerCase().includes(searchTerm.toLowerCase());
+        w.owner_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (w.cnpj ?? "").toLowerCase().includes(searchTerm.toLowerCase());
 
       // Plan type tab filter
       if (selectedPlanFilter === "all") return matchesSearch;
@@ -209,6 +224,31 @@ function Page() {
       </motion.div>
 
       {/* KPI Cards */}
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border/40">
+        {[
+          { key: "clientes" as const, label: "Clientes & Planos", icon: Users },
+          { key: "gateway" as const, label: "Gateway de Pagamento", icon: Wallet },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition",
+              activeTab === t.key
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <t.icon className="h-4 w-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "gateway" ? (
+        <GatewayTab />
+      ) : (
+      <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Total de Oficinas", value: stats.total, icon: Building, color: "text-primary" },
@@ -279,7 +319,7 @@ function Page() {
             <Input
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar por Oficina, Dono, E-mail ou Slug..."
+              placeholder="Buscar por Oficina, Dono, E-mail, CNPJ ou Slug..."
               className="pl-9 h-9 text-xs bg-secondary/30"
             />
           </div>
@@ -298,6 +338,7 @@ function Page() {
                 <tr className="bg-secondary/40 border-b border-border/40 text-muted-foreground text-left">
                   <th className="p-3.5 font-semibold">Oficina / Slug</th>
                   <th className="p-3.5 font-semibold">Proprietário / E-mail</th>
+                  <th className="p-3.5 font-semibold">CNPJ</th>
                   <th className="p-3.5 font-semibold">Plano</th>
                   <th className="p-3.5 font-semibold">Status / Trial Ends</th>
                   <th className="p-3.5 font-semibold">Data Cadastro</th>
@@ -319,6 +360,9 @@ function Page() {
                       <td className="p-3.5">
                         <div className="text-foreground">{w.owner_name}</div>
                         <div className="text-muted-foreground font-mono text-[10px]">{w.owner_email}</div>
+                      </td>
+                      <td className="p-3.5 font-mono text-[11px] text-muted-foreground">
+                        {w.cnpj || <span className="italic text-muted-foreground/60">—</span>}
                       </td>
                       <td className="p-3.5">
                         <span className={cn(
@@ -343,43 +387,67 @@ function Page() {
                         {new Date(w.created_at).toLocaleDateString("pt-BR")}
                       </td>
                       <td className="p-3.5 text-right space-x-1">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => handleOpenEdit(w)}
-                          className="h-7 px-2.5 text-[10px] gap-1 hover:border-primary/40"
-                        >
-                          <Edit3 className="h-3 w-3" /> Alterar Plano
-                        </Button>
-                        
-                        {w.plan === "trial" && !isExpired && (
-                          <Button 
-                            size="sm" 
-                            variant="destructive"
-                            onClick={() => handleBlockAccess(w)}
-                            className="h-7 px-2.5 text-[10px] bg-red-950/40 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white"
-                          >
-                            <Lock className="h-3 w-3" /> Bloquear
-                          </Button>
-                        )}
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          {(["basico", "profissional", "premium"] as const).map(p => (
+                            <Button
+                              key={p}
+                              size="sm"
+                              variant="outline"
+                              disabled={w.plan === p || mUpdatePlan.isPending}
+                              onClick={() => handleQuickChangePlan(w, p)}
+                              className={cn(
+                                "h-7 px-2 text-[10px] capitalize",
+                                w.plan === p
+                                  ? "border-primary/40 text-primary bg-primary/5"
+                                  : "hover:border-primary/40"
+                              )}
+                              title={`Ativar ${planBadges[p].label}`}
+                            >
+                              {p === "basico" ? "Básico" : p === "profissional" ? "Profissional" : "Premium"}
+                            </Button>
+                          ))}
 
-                        {w.plan === "trial" && isExpired && (
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
-                            onClick={() => handleQuickActivate(w)}
-                            className="h-7 px-2.5 text-[10px] text-emerald-400 hover:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/10"
+                            onClick={() => handleOpenEdit(w)}
+                            className="h-7 px-2 text-[10px] gap-1 hover:border-primary/40"
+                            title="Abrir edição avançada"
                           >
-                            <Unlock className="h-3 w-3" /> Reativar
+                            <Edit3 className="h-3 w-3" />
                           </Button>
-                        )}
+
+                          {!(w.plan === "trial" && isExpired) ? (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleBlockAccess(w)}
+                              disabled={mUpdatePlan.isPending}
+                              className="h-7 px-2 text-[10px] gap-1 bg-red-950/40 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white"
+                              title="Pausar / bloquear acesso"
+                            >
+                              <Lock className="h-3 w-3" /> Pausar
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleQuickActivate(w)}
+                              disabled={mUpdatePlan.isPending}
+                              className="h-7 px-2 text-[10px] gap-1 text-emerald-400 hover:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/10"
+                              title="Reativar acesso"
+                            >
+                              <Unlock className="h-3 w-3" /> Reativar
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
                 {filteredWorkshops.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-12 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-12 text-center text-muted-foreground">
                       Nenhuma oficina localizada com os filtros fornecidos.
                     </td>
                   </tr>
@@ -546,5 +614,84 @@ function Page() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function GatewayTab() {
+  const steps = [
+    {
+      icon: Wallet,
+      title: "1. Escolha um Gateway",
+      desc: "Cadastre sua conta em um gateway como Asaas, Stripe ou Mercado Pago e configure planos de assinatura recorrentes (Básico, Profissional e Premium).",
+      color: "text-blue-400",
+      bg: "bg-blue-500/10 border-blue-500/20",
+    },
+    {
+      icon: Webhook,
+      title: "2. Webhook de Pagamento",
+      desc: "No painel do gateway escolhido, configure um Webhook apontando para a rota de API do sistema. Esse endpoint receberá os eventos de pagamento aprovado e renovações automáticas.",
+      color: "text-violet-400",
+      bg: "bg-violet-500/10 border-violet-500/20",
+    },
+    {
+      icon: CheckCircle,
+      title: "3. Recebimento e Liberação",
+      desc: "Quando o gateway aprovar o pagamento ou confirmar a recorrência do mês, ele enviará um sinal para a rota de API, que executará uma atualização automática no banco de dados, trocando o plano do cliente correspondente para ativo.",
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10 border-emerald-500/20",
+    },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-6"
+    >
+      <div className="glass rounded-2xl p-6 border border-border/40 space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 border border-primary/20">
+            <Zap className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold font-display">Automação de Assinaturas</h2>
+            <p className="text-xs text-muted-foreground">Fluxo recomendado para liberar planos automaticamente após o pagamento confirmado pelo gateway.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {steps.map((s, i) => (
+          <motion.div
+            key={s.title}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.08 }}
+            className={cn("rounded-2xl p-5 border space-y-3 glass", s.bg)}
+          >
+            <div className={cn("grid h-10 w-10 place-items-center rounded-xl bg-background/40 border border-border/40", s.color)}>
+              <s.icon className="h-5 w-5" />
+            </div>
+            <h3 className="font-display font-semibold text-foreground">{s.title}</h3>
+            <p className="text-xs leading-relaxed text-muted-foreground">{s.desc}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="glass rounded-2xl p-6 border border-border/40 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <HelpCircle className="h-4 w-4 text-primary" /> Endpoint sugerido para o Webhook
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Configure no seu gateway de pagamento um webhook do tipo <code className="px-1.5 py-0.5 rounded bg-secondary/60 text-foreground font-mono text-[10px]">POST</code> apontando para:
+        </p>
+        <pre className="text-[11px] font-mono bg-secondary/40 border border-border/40 rounded-lg p-3 overflow-x-auto">
+{`https://autopulseos.lovable.app/api/public/webhooks/payment`}
+        </pre>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          O endpoint deve validar a assinatura do gateway (HMAC ou token secreto), localizar a oficina pelo identificador externo enviado no payload e atualizar o campo <code className="font-mono text-foreground">plan</code> da tabela <code className="font-mono text-foreground">workshops</code> ao receber eventos como <code className="font-mono text-foreground">payment.confirmed</code> ou <code className="font-mono text-foreground">subscription.renewed</code>.
+        </p>
+      </div>
+    </motion.div>
   );
 }
