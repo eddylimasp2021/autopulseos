@@ -27,6 +27,7 @@ interface WorkshopAdmin {
   trial_ends_at: string | null;
   created_at: string;
   updated_at: string;
+  cnpj: string | null;
   owner_name: string;
   owner_email: string;
 }
@@ -106,6 +107,18 @@ function Page() {
     }
   };
 
+  // Quick Action: Change plan directly to a paid tier (basico/profissional/premium)
+  const handleQuickChangePlan = (w: WorkshopAdmin, plan: "basico" | "profissional" | "premium") => {
+    const planLabel = planBadges[plan]?.label || plan;
+    if (window.confirm(`Alterar a oficina "${w.name}" para o ${planLabel}?`)) {
+      mUpdatePlan.mutate({
+        workshop_id: w.id,
+        plan,
+        trial_ends_at: null,
+      });
+    }
+  };
+
   // Submits plan update
   const handleSubmitPlan = (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,7 +156,8 @@ function Page() {
         w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         w.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
         w.owner_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        w.owner_name.toLowerCase().includes(searchTerm.toLowerCase());
+        w.owner_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (w.cnpj ?? "").toLowerCase().includes(searchTerm.toLowerCase());
 
       // Plan type tab filter
       if (selectedPlanFilter === "all") return matchesSearch;
@@ -262,7 +276,7 @@ function Page() {
             <Input
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar por Oficina, Dono, E-mail ou Slug..."
+              placeholder="Buscar por Oficina, Dono, E-mail, CNPJ ou Slug..."
               className="pl-9 h-9 text-xs bg-secondary/30"
             />
           </div>
@@ -281,6 +295,7 @@ function Page() {
                 <tr className="bg-secondary/40 border-b border-border/40 text-muted-foreground text-left">
                   <th className="p-3.5 font-semibold">Oficina / Slug</th>
                   <th className="p-3.5 font-semibold">Proprietário / E-mail</th>
+                  <th className="p-3.5 font-semibold">CNPJ</th>
                   <th className="p-3.5 font-semibold">Plano</th>
                   <th className="p-3.5 font-semibold">Status / Trial Ends</th>
                   <th className="p-3.5 font-semibold">Data Cadastro</th>
@@ -302,6 +317,9 @@ function Page() {
                       <td className="p-3.5">
                         <div className="text-foreground">{w.owner_name}</div>
                         <div className="text-muted-foreground font-mono text-[10px]">{w.owner_email}</div>
+                      </td>
+                      <td className="p-3.5 font-mono text-[11px] text-muted-foreground">
+                        {w.cnpj || <span className="italic text-muted-foreground/60">—</span>}
                       </td>
                       <td className="p-3.5">
                         <span className={cn(
@@ -326,43 +344,67 @@ function Page() {
                         {new Date(w.created_at).toLocaleDateString("pt-BR")}
                       </td>
                       <td className="p-3.5 text-right space-x-1">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => handleOpenEdit(w)}
-                          className="h-7 px-2.5 text-[10px] gap-1 hover:border-primary/40"
-                        >
-                          <Edit3 className="h-3 w-3" /> Alterar Plano
-                        </Button>
-                        
-                        {w.plan === "trial" && !isExpired && (
-                          <Button 
-                            size="sm" 
-                            variant="destructive"
-                            onClick={() => handleBlockAccess(w)}
-                            className="h-7 px-2.5 text-[10px] bg-red-950/40 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white"
-                          >
-                            <Lock className="h-3 w-3" /> Bloquear
-                          </Button>
-                        )}
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          {(["basico", "profissional", "premium"] as const).map(p => (
+                            <Button
+                              key={p}
+                              size="sm"
+                              variant="outline"
+                              disabled={w.plan === p || mUpdatePlan.isPending}
+                              onClick={() => handleQuickChangePlan(w, p)}
+                              className={cn(
+                                "h-7 px-2 text-[10px] capitalize",
+                                w.plan === p
+                                  ? "border-primary/40 text-primary bg-primary/5"
+                                  : "hover:border-primary/40"
+                              )}
+                              title={`Ativar ${planBadges[p].label}`}
+                            >
+                              {p === "basico" ? "Básico" : p === "profissional" ? "Profissional" : "Premium"}
+                            </Button>
+                          ))}
 
-                        {w.plan === "trial" && isExpired && (
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
-                            onClick={() => handleQuickActivate(w)}
-                            className="h-7 px-2.5 text-[10px] text-emerald-400 hover:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/10"
+                            onClick={() => handleOpenEdit(w)}
+                            className="h-7 px-2 text-[10px] gap-1 hover:border-primary/40"
+                            title="Abrir edição avançada"
                           >
-                            <Unlock className="h-3 w-3" /> Reativar
+                            <Edit3 className="h-3 w-3" />
                           </Button>
-                        )}
+
+                          {!(w.plan === "trial" && isExpired) ? (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleBlockAccess(w)}
+                              disabled={mUpdatePlan.isPending}
+                              className="h-7 px-2 text-[10px] gap-1 bg-red-950/40 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white"
+                              title="Pausar / bloquear acesso"
+                            >
+                              <Lock className="h-3 w-3" /> Pausar
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleQuickActivate(w)}
+                              disabled={mUpdatePlan.isPending}
+                              className="h-7 px-2 text-[10px] gap-1 text-emerald-400 hover:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/10"
+                              title="Reativar acesso"
+                            >
+                              <Unlock className="h-3 w-3" /> Reativar
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
                 {filteredWorkshops.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-12 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-12 text-center text-muted-foreground">
                       Nenhuma oficina localizada com os filtros fornecidos.
                     </td>
                   </tr>

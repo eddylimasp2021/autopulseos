@@ -791,6 +791,7 @@ export type Database = {
       }
       workshops: {
         Row: {
+          cnpj: string | null
           created_at: string
           id: string
           logo_url: string | null
@@ -802,6 +803,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cnpj?: string | null
           created_at?: string
           id?: string
           logo_url?: string | null
@@ -813,6 +815,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cnpj?: string | null
           created_at?: string
           id?: string
           logo_url?: string | null
