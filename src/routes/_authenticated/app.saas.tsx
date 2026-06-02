@@ -344,36 +344,60 @@ function Page() {
                         {new Date(w.created_at).toLocaleDateString("pt-BR")}
                       </td>
                       <td className="p-3.5 text-right space-x-1">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => handleOpenEdit(w)}
-                          className="h-7 px-2.5 text-[10px] gap-1 hover:border-primary/40"
-                        >
-                          <Edit3 className="h-3 w-3" /> Alterar Plano
-                        </Button>
-                        
-                        {w.plan === "trial" && !isExpired && (
-                          <Button 
-                            size="sm" 
-                            variant="destructive"
-                            onClick={() => handleBlockAccess(w)}
-                            className="h-7 px-2.5 text-[10px] bg-red-950/40 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white"
-                          >
-                            <Lock className="h-3 w-3" /> Bloquear
-                          </Button>
-                        )}
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          {(["basico", "profissional", "premium"] as const).map(p => (
+                            <Button
+                              key={p}
+                              size="sm"
+                              variant="outline"
+                              disabled={w.plan === p || mUpdatePlan.isPending}
+                              onClick={() => handleQuickChangePlan(w, p)}
+                              className={cn(
+                                "h-7 px-2 text-[10px] capitalize",
+                                w.plan === p
+                                  ? "border-primary/40 text-primary bg-primary/5"
+                                  : "hover:border-primary/40"
+                              )}
+                              title={`Ativar ${planBadges[p].label}`}
+                            >
+                              {p === "basico" ? "Básico" : p === "profissional" ? "Profissional" : "Premium"}
+                            </Button>
+                          ))}
 
-                        {w.plan === "trial" && isExpired && (
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
-                            onClick={() => handleQuickActivate(w)}
-                            className="h-7 px-2.5 text-[10px] text-emerald-400 hover:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/10"
+                            onClick={() => handleOpenEdit(w)}
+                            className="h-7 px-2 text-[10px] gap-1 hover:border-primary/40"
+                            title="Abrir edição avançada"
                           >
-                            <Unlock className="h-3 w-3" /> Reativar
+                            <Edit3 className="h-3 w-3" />
                           </Button>
-                        )}
+
+                          {!(w.plan === "trial" && isExpired) ? (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleBlockAccess(w)}
+                              disabled={mUpdatePlan.isPending}
+                              className="h-7 px-2 text-[10px] gap-1 bg-red-950/40 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white"
+                              title="Pausar / bloquear acesso"
+                            >
+                              <Lock className="h-3 w-3" /> Pausar
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleQuickActivate(w)}
+                              disabled={mUpdatePlan.isPending}
+                              className="h-7 px-2 text-[10px] gap-1 text-emerald-400 hover:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/10"
+                              title="Reativar acesso"
+                            >
+                              <Unlock className="h-3 w-3" /> Reativar
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
