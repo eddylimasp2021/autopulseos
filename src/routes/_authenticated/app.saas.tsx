@@ -295,6 +295,7 @@ function Page() {
                 <tr className="bg-secondary/40 border-b border-border/40 text-muted-foreground text-left">
                   <th className="p-3.5 font-semibold">Oficina / Slug</th>
                   <th className="p-3.5 font-semibold">Proprietário / E-mail</th>
+                  <th className="p-3.5 font-semibold">CNPJ</th>
                   <th className="p-3.5 font-semibold">Plano</th>
                   <th className="p-3.5 font-semibold">Status / Trial Ends</th>
                   <th className="p-3.5 font-semibold">Data Cadastro</th>
