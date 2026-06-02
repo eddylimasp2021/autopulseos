@@ -318,6 +318,9 @@ function Page() {
                         <div className="text-foreground">{w.owner_name}</div>
                         <div className="text-muted-foreground font-mono text-[10px]">{w.owner_email}</div>
                       </td>
+                      <td className="p-3.5 font-mono text-[11px] text-muted-foreground">
+                        {w.cnpj || <span className="italic text-muted-foreground/60">—</span>}
+                      </td>
                       <td className="p-3.5">
                         <span className={cn(
                           "px-2 py-0.5 rounded border text-[9px] font-semibold uppercase tracking-wide",
