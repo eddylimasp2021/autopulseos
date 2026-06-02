@@ -27,6 +27,7 @@ interface WorkshopAdmin {
   trial_ends_at: string | null;
   created_at: string;
   updated_at: string;
+  cnpj: string | null;
   owner_name: string;
   owner_email: string;
 }
@@ -102,6 +103,18 @@ function Page() {
         workshop_id: w.id,
         plan: "profissional",
         trial_ends_at: null
+      });
+    }
+  };
+
+  // Quick Action: Change plan directly to a paid tier (basico/profissional/premium)
+  const handleQuickChangePlan = (w: WorkshopAdmin, plan: "basico" | "profissional" | "premium") => {
+    const planLabel = planBadges[plan]?.label || plan;
+    if (window.confirm(`Alterar a oficina "${w.name}" para o ${planLabel}?`)) {
+      mUpdatePlan.mutate({
+        workshop_id: w.id,
+        plan,
+        trial_ends_at: null,
       });
     }
   };
