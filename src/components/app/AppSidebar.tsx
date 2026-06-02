@@ -5,6 +5,9 @@ import {
   Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getWorkshop } from "@/lib/configuracoes.functions";
 
 type Item = { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean };
 const items: Item[] = [
@@ -26,6 +29,29 @@ const items: Item[] = [
 
 export function AppSidebar() {
   const path = useRouterState({ select: (r) => r.location.pathname });
+  const fnGetW = useServerFn(getWorkshop);
+  const { data: workshop } = useQuery({ queryKey: ["workshop"], queryFn: () => fnGetW() });
+
+  const plan = workshop?.plan || "trial";
+  const isTrial = plan === "trial";
+  
+  const now = new Date();
+  const trialEnds = workshop?.trial_ends_at ? new Date(workshop.trial_ends_at) : null;
+  let diasRestantes = 0;
+  if (trialEnds) {
+    const diffTime = trialEnds.getTime() - now.getTime();
+    diasRestantes = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  }
+
+  const percentage = isTrial ? Math.min(100, Math.max(0, (diasRestantes / 14) * 100)) : 100;
+
+  const planNames: Record<string, string> = {
+    trial: "Trial",
+    basico: "Básico",
+    profissional: "Profissional",
+    premium: "Premium"
+  };
+
   return (
     <aside className="hidden md:flex md:w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
       <div className="flex h-16 items-center gap-2 px-6 border-b border-sidebar-border">
@@ -63,10 +89,32 @@ export function AppSidebar() {
       </nav>
       <div className="m-3 rounded-xl glass p-4">
         <div className="text-xs text-muted-foreground">Plano</div>
-        <div className="font-display text-sm font-semibold text-foreground">Trial · 14 dias</div>
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-          <div className="h-full w-[35%] rounded-full bg-[image:var(--gradient-neon)]" />
+        <div className="font-display text-sm font-semibold text-foreground">
+          {isTrial ? (
+            diasRestantes > 0 ? `Trial · ${diasRestantes} ${diasRestantes === 1 ? 'dia' : 'dias'}` : "Trial · Expirado"
+          ) : (
+            `Plano ${planNames[plan] || plan}`
+          )}
         </div>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <div 
+            style={{ width: `${percentage}%` }}
+            className={cn(
+              "h-full rounded-full transition-all duration-500",
+              isTrial && diasRestantes <= 3 ? "bg-destructive shadow-[0_0_8px_currentColor]" : "bg-[image:var(--gradient-neon)]"
+            )} 
+          />
+        </div>
+        {isTrial && diasRestantes <= 3 && (
+          <div className="mt-1.5 text-[9px] text-destructive font-medium animate-pulse">
+            {diasRestantes === 0 ? "Sua avaliação terminou!" : "Seu trial está prestes a expirar!"}
+          </div>
+        )}
+        {!isTrial && (
+          <div className="mt-1 text-[9px] text-emerald-400 font-medium">
+            Assinatura Ativa
+          </div>
+        )}
       </div>
     </aside>
   );
