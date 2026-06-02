@@ -67,7 +67,7 @@ function Page() {
   }, [saasConfig]);
 
   // State
-  const [activeTab, setActiveTab] = useState("clientes");
+  const [activeTab, setActiveTab] = useState<"clientes" | "gateway">("clientes");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>("all");
   
@@ -75,12 +75,10 @@ function Page() {
   const [asaasApiKey, setAsaasApiKey] = useState("");
   const [asaasWebhookSecret, setAsaasWebhookSecret] = useState("");
   
-  // Dialog State
   const [editOpen, setEditOpen] = useState(false);
   const [selectedWorkshop, setSelectedWorkshop] = useState<WorkshopAdmin | null>(null);
   const [newPlan, setNewPlan] = useState<"trial" | "basico" | "profissional" | "premium">("trial");
   const [trialEndsAt, setTrialEndsAt] = useState("");
-  const [activeTab, setActiveTab] = useState<"clientes" | "gateway">("clientes");
 
   // Mutations
   const mUpdatePlan = useMutation({
@@ -245,10 +243,7 @@ function Page() {
         ))}
       </div>
 
-      {activeTab === "gateway" ? (
-        <GatewayTab />
-      ) : (
-      <>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Total de Oficinas", value: stats.total, icon: Building, color: "text-primary" },
@@ -617,81 +612,4 @@ function Page() {
   );
 }
 
-function GatewayTab() {
-  const steps = [
-    {
-      icon: Wallet,
-      title: "1. Escolha um Gateway",
-      desc: "Cadastre sua conta em um gateway como Asaas, Stripe ou Mercado Pago e configure planos de assinatura recorrentes (Básico, Profissional e Premium).",
-      color: "text-blue-400",
-      bg: "bg-blue-500/10 border-blue-500/20",
-    },
-    {
-      icon: Webhook,
-      title: "2. Webhook de Pagamento",
-      desc: "No painel do gateway escolhido, configure um Webhook apontando para a rota de API do sistema. Esse endpoint receberá os eventos de pagamento aprovado e renovações automáticas.",
-      color: "text-violet-400",
-      bg: "bg-violet-500/10 border-violet-500/20",
-    },
-    {
-      icon: CheckCircle,
-      title: "3. Recebimento e Liberação",
-      desc: "Quando o gateway aprovar o pagamento ou confirmar a recorrência do mês, ele enviará um sinal para a rota de API, que executará uma atualização automática no banco de dados, trocando o plano do cliente correspondente para ativo.",
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10 border-emerald-500/20",
-    },
-  ];
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
-    >
-      <div className="glass rounded-2xl p-6 border border-border/40 space-y-2">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 border border-primary/20">
-            <Zap className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold font-display">Automação de Assinaturas</h2>
-            <p className="text-xs text-muted-foreground">Fluxo recomendado para liberar planos automaticamente após o pagamento confirmado pelo gateway.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {steps.map((s, i) => (
-          <motion.div
-            key={s.title}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.08 }}
-            className={cn("rounded-2xl p-5 border space-y-3 glass", s.bg)}
-          >
-            <div className={cn("grid h-10 w-10 place-items-center rounded-xl bg-background/40 border border-border/40", s.color)}>
-              <s.icon className="h-5 w-5" />
-            </div>
-            <h3 className="font-display font-semibold text-foreground">{s.title}</h3>
-            <p className="text-xs leading-relaxed text-muted-foreground">{s.desc}</p>
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="glass rounded-2xl p-6 border border-border/40 space-y-3">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <HelpCircle className="h-4 w-4 text-primary" /> Endpoint sugerido para o Webhook
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Configure no seu gateway de pagamento um webhook do tipo <code className="px-1.5 py-0.5 rounded bg-secondary/60 text-foreground font-mono text-[10px]">POST</code> apontando para:
-        </p>
-        <pre className="text-[11px] font-mono bg-secondary/40 border border-border/40 rounded-lg p-3 overflow-x-auto">
-{`https://autopulseos.lovable.app/api/public/webhooks/payment`}
-        </pre>
-        <p className="text-[10px] text-muted-foreground leading-relaxed">
-          O endpoint deve validar a assinatura do gateway (HMAC ou token secreto), localizar a oficina pelo identificador externo enviado no payload e atualizar o campo <code className="font-mono text-foreground">plan</code> da tabela <code className="font-mono text-foreground">workshops</code> ao receber eventos como <code className="font-mono text-foreground">payment.confirmed</code> ou <code className="font-mono text-foreground">subscription.renewed</code>.
-        </p>
-      </div>
-    </motion.div>
-  );
-}
