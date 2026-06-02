@@ -30,7 +30,14 @@ export const Route = createFileRoute("/_authenticated")({
     if (error || !data.user) throw redirect({ to: "/auth" });
     return { user: data.user };
   },
-  loader: () => getAuthenticatedLayoutData(),
+  loader: async () => {
+    try {
+      return await getAuthenticatedLayoutData();
+    } catch (e) {
+      console.warn("Auth layout loader failed, using client fallback", e);
+      return { userId: null, fullName: null };
+    }
+  },
   component: AuthLayout,
   errorComponent: AuthLayoutError,
   notFoundComponent: AuthLayoutNotFound,
