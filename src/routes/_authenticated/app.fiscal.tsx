@@ -57,6 +57,13 @@ const FiscalSchema = z.object({
 });
 type FiscalFormData = z.infer<typeof FiscalSchema>;
 
+const ApiGatewaySchema = z.object({
+  id: z.string().uuid().optional().nullable(),
+  api_provider: z.string().trim().optional().nullable(),
+  api_token: z.string().trim().optional().nullable(),
+});
+type ApiGatewayFormData = z.infer<typeof ApiGatewaySchema>;
+
 interface ParsedXML {
   chave: string;
   numero: number;
@@ -108,7 +115,7 @@ function Page() {
   });
 
   const mSaveConfig = useMutation({
-    mutationFn: (d: FiscalFormData) => saveWConfig({ data: d }),
+    mutationFn: (d: any) => saveWConfig({ data: d }),
     onSuccess: () => {
       toast.success("Configuração fiscal salva com sucesso!");
       refetchConfig();
@@ -618,56 +625,18 @@ function ConfigTab({ config, loading, onSave, saving }: {
 function ApiGatewayTab({ config, loading, onSave, saving }: {
   config: any;
   loading: boolean;
-  onSave: (d: FiscalFormData) => void;
+  onSave: (d: any) => void;
   saving: boolean;
 }) {
   const [testingConnection, setTestingConnection] = useState(false);
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FiscalFormData>({
-    resolver: zodResolver(FiscalSchema),
+  const { register, handleSubmit, setValue, watch } = useForm<ApiGatewayFormData>({
+    resolver: zodResolver(ApiGatewaySchema),
     values: config ? {
       id: config.id,
-      cnpj: config.cnpj ?? "",
-      razao_social: config.razao_social ?? "",
-      nome_fantasia: config.nome_fantasia ?? "",
-      inscricao_estadual: config.inscricao_estadual ?? "",
-      inscricao_municipal: config.inscricao_municipal ?? "",
-      regime_tributario: config.regime_tributario ?? "simples_nacional",
-      cnae: config.cnae ?? "",
-      ambiente: config.ambiente ?? "homologacao",
-      certificado_base64: config.certificado_base64 ?? "",
-      certificado_senha: config.certificado_senha ?? "",
-      certificado_nome_arquivo: config.certificado_nome_arquivo ?? "",
-      nfce_serie: config.nfce_serie ?? 1,
-      nfce_ultimo_numero: config.nfce_ultimo_numero ?? 0,
-      nfce_csc_id: config.nfce_csc_id ?? "",
-      nfce_csc_token: config.nfce_csc_token ?? "",
-      nfe_serie: config.nfe_serie ?? 1,
-      nfe_ultimo_numero: config.nfe_ultimo_numero ?? 0,
-      nfse_serie: config.nfse_serie ?? 1,
-      nfse_ultimo_numero: config.nfse_ultimo_numero ?? 0,
       api_provider: config.api_provider ?? "none",
       api_token: config.api_token ?? "",
     } : {
-      cnpj: "",
-      razao_social: "",
-      nome_fantasia: "",
-      inscricao_estadual: "",
-      inscricao_municipal: "",
-      regime_tributario: "simples_nacional",
-      cnae: "",
-      ambiente: "homologacao",
-      certificado_base64: "",
-      certificado_senha: "",
-      certificado_nome_arquivo: "",
-      nfce_serie: 1,
-      nfce_ultimo_numero: 0,
-      nfce_csc_id: "",
-      nfce_csc_token: "",
-      nfe_serie: 1,
-      nfe_ultimo_numero: 0,
-      nfse_serie: 1,
-      nfse_ultimo_numero: 0,
       api_provider: "none",
       api_token: "",
     }

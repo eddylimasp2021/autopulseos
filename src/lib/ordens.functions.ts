@@ -113,17 +113,26 @@ export const deleteOrdem = createServerFn({ method: "POST" })
   });
 
 export const updateOrdemElevador = createServerFn({ method: "POST" })
-  .inputValidator((d: { id: string; elevador: number | null }) =>
-    z.object({ id: z.string().uuid(), elevador: z.number().int().min(1).max(7).nullable() }).parse(d),
+  .inputValidator((d: { id: string; elevador: number | null; status?: "aberta" | "em_andamento" | "aguardando_peca" | "concluida" | "cancelada" | "entregue" | null }) =>
+    z.object({ 
+      id: z.string().uuid(), 
+      elevador: z.number().int().min(1).max(7).nullable(),
+      status: z.enum(["aberta", "em_andamento", "aguardando_peca", "concluida", "cancelada", "entregue"]).optional().nullable()
+    }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context as any;
+    const updatePayload: any = {
+      elevador: data.elevador,
+    };
+    if (data.status) {
+      updatePayload.status = data.status;
+    } else {
+      updatePayload.status = data.elevador ? "em_andamento" : "aberta";
+    }
     const { data: row, error } = await supabase
       .from("ordens_servico")
-      .update({ 
-        elevador: data.elevador,
-        status: data.elevador ? "em_andamento" : "aberta"
-      })
+      .update(updatePayload)
       .eq("id", data.id)
       .select()
       .single();

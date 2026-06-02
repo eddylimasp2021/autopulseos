@@ -46,63 +46,34 @@ export const saveFiscalConfig = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase } = context as any;
     
+    const payload: any = {};
+    const fields = [
+      "cnpj", "razao_social", "nome_fantasia", "inscricao_estadual", "inscricao_municipal",
+      "regime_tributario", "cnae", "ambiente", "certificado_base64", "certificado_senha",
+      "certificado_nome_arquivo", "nfce_serie", "nfce_ultimo_numero", "nfce_csc_id",
+      "nfce_csc_token", "nfe_serie", "nfe_ultimo_numero", "nfse_serie", "nfse_ultimo_numero",
+      "api_provider", "api_token"
+    ];
+    
+    fields.forEach(field => {
+      if ((data as any)[field] !== undefined) {
+        payload[field] = (data as any)[field];
+      }
+    });
+
     if (data.id) {
       // Update
+      payload.updated_at = new Date().toISOString();
       const { error } = await supabase
         .from("fiscal_config")
-        .update({
-          cnpj: data.cnpj,
-          razao_social: data.razao_social,
-          nome_fantasia: data.nome_fantasia,
-          inscricao_estadual: data.inscricao_estadual,
-          inscricao_municipal: data.inscricao_municipal,
-          regime_tributario: data.regime_tributario,
-          cnae: data.cnae,
-          ambiente: data.ambiente,
-          certificado_base64: data.certificado_base64,
-          certificado_senha: data.certificado_senha,
-          certificado_nome_arquivo: data.certificado_nome_arquivo,
-          nfce_serie: data.nfce_serie,
-          nfce_ultimo_numero: data.nfce_ultimo_numero,
-          nfce_csc_id: data.nfce_csc_id,
-          nfce_csc_token: data.nfce_csc_token,
-          nfe_serie: data.nfe_serie,
-          nfe_ultimo_numero: data.nfe_ultimo_numero,
-          nfse_serie: data.nfse_serie,
-          nfse_ultimo_numero: data.nfse_ultimo_numero,
-          api_provider: data.api_provider,
-          api_token: data.api_token,
-          updated_at: new Date().toISOString()
-        })
+        .update(payload)
         .eq("id", data.id);
       if (error) throw new Error(error.message);
     } else {
       // Insert
       const { error } = await supabase
         .from("fiscal_config")
-        .insert({
-          cnpj: data.cnpj,
-          razao_social: data.razao_social,
-          nome_fantasia: data.nome_fantasia,
-          inscricao_estadual: data.inscricao_estadual,
-          inscricao_municipal: data.inscricao_municipal,
-          regime_tributario: data.regime_tributario,
-          cnae: data.cnae,
-          ambiente: data.ambiente,
-          certificado_base64: data.certificado_base64,
-          certificado_senha: data.certificado_senha,
-          certificado_nome_arquivo: data.certificado_nome_arquivo,
-          nfce_serie: data.nfce_serie,
-          nfce_ultimo_numero: data.nfce_ultimo_numero,
-          nfce_csc_id: data.nfce_csc_id,
-          nfce_csc_token: data.nfce_csc_token,
-          nfe_serie: data.nfe_serie,
-          nfe_ultimo_numero: data.nfe_ultimo_numero,
-          nfse_serie: data.nfse_serie,
-          nfse_ultimo_numero: data.nfse_ultimo_numero,
-          api_provider: data.api_provider,
-          api_token: data.api_token
-        });
+        .insert(payload);
       if (error) throw new Error(error.message);
     }
     return { ok: true };

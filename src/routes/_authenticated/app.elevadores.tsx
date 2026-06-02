@@ -135,10 +135,8 @@ function Page() {
 
   const mReleaseToPDV = useMutation({
     mutationFn: async (osId: string) => {
-      // 1. Atualiza status para concluída
-      await updateStatus({ data: { id: osId, status: "concluida" } });
-      // 2. Tira do elevador
-      await updateElevador({ data: { id: osId, elevador: null } });
+      // Conclui a OS e remove do elevador em uma única chamada
+      await updateElevador({ data: { id: osId, elevador: null, status: "concluida" } });
     },
     onSuccess: () => {
       toast.success("OS concluída e enviada ao PDV para faturamento!");
