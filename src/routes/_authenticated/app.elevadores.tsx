@@ -367,12 +367,14 @@ function BayCard({
     setLoadingAction(true);
     try {
       await addItemFn({
-        os_id: os.id,
-        tipo,
-        descricao: desc,
-        quantidade: Number(itemQtd.replace(",", ".")) || 1,
-        valor_unit: price,
-        estoque_item_id: estoqueId
+        data: {
+          os_id: os.id,
+          tipo,
+          descricao: desc,
+          quantidade: Number(itemQtd.replace(",", ".")) || 1,
+          valor_unit: price,
+          estoque_item_id: estoqueId
+        }
       });
       toast.success("Item adicionado");
       refetchDetails();
@@ -396,7 +398,7 @@ function BayCard({
     if (!confirm("Remover este item?")) return;
     setLoadingAction(true);
     try {
-      await removeItemFn({ id: itemId, os_id: os.id });
+      await removeItemFn({ data: { id: itemId, os_id: os.id } });
       toast.success("Item removido");
       refetchDetails();
       onReload();
