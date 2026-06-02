@@ -4,8 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { Settings, Building2, Users, MessageSquare, LogOut, Save, Shield, Cloud, Download, UploadCloud, History, Loader2, RefreshCw, FileJson, CheckCircle2 } from "lucide-react";
-import { getWorkshop, updateWorkshop, getProfile, updateProfile, listTeam, getWorkshopBackupData } from "@/lib/configuracoes.functions";
+import { Settings, Building2, Users, MessageSquare, LogOut, Save, Shield, Cloud, Download, UploadCloud, History, Loader2, RefreshCw, FileJson, CheckCircle2, LifeBuoy } from "lucide-react";
+import { getWorkshop, updateWorkshop, getProfile, updateProfile, listTeam, getWorkshopBackupData, toggleSupport } from "@/lib/configuracoes.functions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ function Page() {
   const fnUpP = useServerFn(updateProfile);
   const fnTeam = useServerFn(listTeam);
   const fnBackup = useServerFn(getWorkshopBackupData);
+  const fnToggleSupport = useServerFn(toggleSupport);
 
   const { data: workshop } = useQuery({ queryKey: ["workshop"], queryFn: () => fnGetW() });
   const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: () => fnGetP() });
@@ -30,6 +31,7 @@ function Page() {
   const [wName, setWName] = useState("");
   const [wLogo, setWLogo] = useState("");
   const [pName, setPName] = useState("");
+  const [supportEnabled, setSupportEnabled] = useState(false);
 
   const [activeTab, setActiveTab] = useState("geral");
   const [backupLogs, setBackupLogs] = useState<any[]>(() => {
@@ -50,7 +52,11 @@ function Page() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (workshop) { setWName(workshop.name ?? ""); setWLogo(workshop.logo_url ?? ""); }
+    if (workshop) { 
+      setWName(workshop.name ?? ""); 
+      setWLogo(workshop.logo_url ?? ""); 
+      setSupportEnabled(workshop.support_enabled ?? false);
+    }
   }, [workshop]);
   useEffect(() => { if (profile) setPName(profile.full_name ?? ""); }, [profile]);
 
@@ -63,6 +69,18 @@ function Page() {
     mutationFn: (v: any) => fnUpP({ data: v }),
     onSuccess: () => { toast.success("Perfil atualizado"); qc.invalidateQueries({ queryKey: ["profile"] }); },
     onError: (e: any) => toast.error(e?.message ?? "Falha ao salvar"),
+  });
+  const mToggleSupport = useMutation({
+    mutationFn: (enabled: boolean) => fnToggleSupport({ data: { id: workshop!.id, enabled } }),
+    onSuccess: (_, enabled) => { 
+      toast.success(enabled ? "Acesso do suporte ativado" : "Acesso do suporte revogado");
+      setSupportEnabled(enabled);
+      qc.invalidateQueries({ queryKey: ["workshop"] }); 
+    },
+    onError: (e: any) => {
+      setSupportEnabled(!supportEnabled); // revert
+      toast.error(e?.message ?? "Falha ao alterar acesso do suporte");
+    },
   });
 
   const handleCloudBackup = async () => {
@@ -187,10 +205,49 @@ function Page() {
           <TabsTrigger value="geral" className="gap-2 rounded-lg text-xs md:text-sm">
             <Building2 className="h-4 w-4" /> Geral
           </TabsTrigger>
+          <TabsTrigger value="suporte" className="gap-2 rounded-lg text-xs md:text-sm">
+            <LifeBuoy className="h-4 w-4" /> Receber Suporte
+          </TabsTrigger>
           <TabsTrigger value="backups" className="gap-2 rounded-lg text-xs md:text-sm">
             <Cloud className="h-4 w-4" /> Backup & Restauração
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="suporte" className="mt-0 space-y-6">
+          <div className="glass rounded-2xl p-6 space-y-6 max-w-2xl">
+            <div className="flex items-start gap-4">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary/10">
+                <LifeBuoy className="h-6 w-6 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold">Acesso da Equipe de Suporte</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Caso você esteja enfrentando problemas ou precise de ajuda técnica avançada, você pode permitir que a equipe de suporte acesse temporariamente o seu painel de forma segura, como se fosse você.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-secondary/20 p-5 flex flex-col md:flex-row gap-5 justify-between items-center">
+              <div>
+                <p className="font-medium text-foreground">Permitir acesso remoto</p>
+                <p className="text-xs text-muted-foreground mt-1">Habilitar ou desabilitar o acesso seguro ao seu painel pela equipe da plataforma.</p>
+              </div>
+              <Button 
+                variant={supportEnabled ? "destructive" : "default"} 
+                disabled={!workshop?.id || mToggleSupport.isPending}
+                onClick={() => {
+                  const newState = !supportEnabled;
+                  setSupportEnabled(newState);
+                  mToggleSupport.mutate(newState);
+                }}
+                className="w-full md:w-auto"
+              >
+                {mToggleSupport.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {supportEnabled ? "Revogar Acesso" : "Autorizar Suporte"}
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
 
         <TabsContent value="geral" className="mt-0 space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">

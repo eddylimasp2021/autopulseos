@@ -873,6 +873,7 @@ export type Database = {
           plan: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores: number
           slug: string
+          support_enabled: boolean
           trial_ends_at: string
           updated_at: string
         }
@@ -885,6 +886,7 @@ export type Database = {
           plan?: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores?: number
           slug: string
+          support_enabled?: boolean
           trial_ends_at?: string
           updated_at?: string
         }
@@ -897,6 +899,7 @@ export type Database = {
           plan?: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores?: number
           slug?: string
+          support_enabled?: boolean
           trial_ends_at?: string
           updated_at?: string
         }

@@ -1,0 +1,1 @@
+ALTER TABLE public.workshops ADD COLUMN IF NOT EXISTS support_enabled boolean DEFAULT false;

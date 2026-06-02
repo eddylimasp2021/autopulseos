@@ -5,7 +5,7 @@ export const getWorkshop = createServerFn({ method: "GET" }).handler(async ({ co
   const { supabase } = context as any;
   const { data: members, error: em } = await supabase
     .from("workshop_members")
-    .select("workshop_id,role,workshops(id,name,slug,logo_url,plan,trial_ends_at,quantidade_elevadores)")
+    .select("workshop_id,role,workshops(id,name,slug,logo_url,plan,trial_ends_at,quantidade_elevadores,support_enabled)")
     .order("created_at", { ascending: true })
     .limit(1);
   if (em) throw new Error(em.message);
@@ -41,6 +41,20 @@ export const updateWorkshopElevadores = createServerFn({ method: "POST" })
     const { error } = await supabase
       .from("workshops")
       .update({ quantidade_elevadores: data.quantidade })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const toggleSupport = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string; enabled: boolean }) =>
+    z.object({ id: z.string().uuid(), enabled: z.boolean() }).parse(d)
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    const { error } = await supabase
+      .from("workshops")
+      .update({ support_enabled: data.enabled })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };

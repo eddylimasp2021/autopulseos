@@ -80,6 +80,7 @@ export const listWorkshopsAdminHandler = async ({ context }: { context: any }) =
       created_at: w.created_at,
       updated_at: w.updated_at,
       cnpj: (w as any).cnpj ?? null,
+      support_enabled: (w as any).support_enabled ?? false,
       owner_name: ownerName,
       owner_email: ownerEmail
     };
@@ -126,6 +127,46 @@ export const listWorkshopsAdmin = createServerFn({ method: "GET" }).handler(list
 export const updateWorkshopPlanAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: UpdatePlanInputType) => UpdatePlanInput.parse(d))
   .handler(updateWorkshopPlanAdminHandler);
+
+export const generateSupportLink = createServerFn({ method: "POST" })
+  .inputValidator((d: { workshop_id: string }) => z.object({ workshop_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await checkSuperAdmin(context);
+
+    // Verify if workshop has support_enabled
+    const { data: workshop, error: errW } = await supabaseAdmin
+      .from("workshops")
+      .select("support_enabled")
+      .eq("id", data.workshop_id)
+      .single();
+
+    if (errW || !workshop) throw new Error("Oficina não encontrada.");
+    if (!workshop.support_enabled) throw new Error("Acesso de suporte não habilitado para esta oficina.");
+
+    // Get the owner
+    const { data: member, error: errM } = await supabaseAdmin
+      .from("workshop_members")
+      .select("user_id")
+      .eq("workshop_id", data.workshop_id)
+      .eq("role", "owner")
+      .single();
+
+    if (errM || !member) throw new Error("Proprietário da oficina não encontrado.");
+
+    // Get owner email
+    const { data: { user }, error: errU } = await supabaseAdmin.auth.admin.getUserById(member.user_id);
+    if (errU || !user || !user.email) throw new Error("E-mail do proprietário não encontrado.");
+
+    // Generate magic link
+    const { data: linkData, error: errLink } = await supabaseAdmin.auth.admin.generateLink({
+      type: "magiclink",
+      email: user.email,
+    });
+
+    if (errLink) throw new Error("Falha ao gerar link de acesso: " + errLink.message);
+
+    return { action_link: linkData.properties.action_link };
+  });
 
 export const getSaasConfigAdminHandler = async ({ context }: { context: any }) => {
   await checkSuperAdmin(context);

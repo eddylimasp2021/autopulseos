@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, Building, CreditCard, Search, Edit3, Calendar,
   AlertTriangle, Lock, Unlock, ArrowUpRight, HelpCircle, Loader2, CheckCircle2,
-  Trash2, Save, Server, Webhook, Wallet, CheckCircle, Zap
+  Trash2, Save, Server, Webhook, Wallet, CheckCircle, Zap, MonitorPlay
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { listWorkshopsAdmin, updateWorkshopPlanAdmin, getSaasConfigAdmin, updateSaasConfigAdmin } from "@/lib/saas.functions";
+import { listWorkshopsAdmin, updateWorkshopPlanAdmin, getSaasConfigAdmin, updateSaasConfigAdmin, generateSupportLink } from "@/lib/saas.functions";
 
 export const Route = createFileRoute("/_authenticated/app/saas")({ component: Page });
 
@@ -29,6 +29,7 @@ interface WorkshopAdmin {
   created_at: string;
   updated_at: string;
   cnpj: string | null;
+  support_enabled: boolean;
   owner_name: string;
   owner_email: string;
 }
@@ -44,6 +45,7 @@ function Page() {
   const qc = useQueryClient();
   const getWorkshops = useServerFn(listWorkshopsAdmin);
   const updatePlan = useServerFn(updateWorkshopPlanAdmin);
+  const genSupportLink = useServerFn(generateSupportLink);
 
   // Queries
   const { data: workshops = [], isLoading } = useQuery<WorkshopAdmin[]>({
@@ -67,7 +69,7 @@ function Page() {
   }, [saasConfig]);
 
   // State
-  const [activeTab, setActiveTab] = useState<"clientes" | "gateway">("clientes");
+  const [activeTab, setActiveTab] = useState<"clientes" | "gateway" | "suporte">("clientes");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>("all");
   
@@ -98,12 +100,20 @@ function Page() {
     mutationFn: (payload: { asaas_api_key: string; asaas_webhook_secret: string }) => 
       updateSaasConfig({ data: payload }),
     onSuccess: () => {
-      toast.success("Configurações do Gateway atualizadas!");
+      toast.success("Configurações do Gateway salvas!");
       qc.invalidateQueries({ queryKey: ["saas-config"] });
     },
     onError: (err: any) => {
-      toast.error(`Falha ao salvar: ${err.message}`);
+      toast.error(`Falha ao salvar gateway: ${err.message}`);
     }
+  });
+
+  const mGenerateSupport = useMutation({
+    mutationFn: (workshop_id: string) => genSupportLink({ data: { workshop_id } }),
+    onSuccess: (res) => {
+      window.open(res.action_link, "_blank");
+    },
+    onError: (err: any) => toast.error(err.message)
   });
 
   // Open plan edit dialog
@@ -227,6 +237,7 @@ function Page() {
         {[
           { key: "clientes" as const, label: "Clientes & Planos", icon: Users },
           { key: "gateway" as const, label: "Gateway de Pagamento", icon: Wallet },
+          { key: "suporte" as const, label: "Dar Suporte (VNC)", icon: MonitorPlay },
         ].map(t => (
           <button
             key={t.key}
@@ -280,7 +291,68 @@ function Page() {
           <TabsTrigger value="gateway" className="gap-2 rounded-lg text-xs md:text-sm">
             <CreditCard className="h-4 w-4" /> Gateway de Pagamento
           </TabsTrigger>
+          <TabsTrigger value="suporte" className="gap-2 rounded-lg text-xs md:text-sm">
+            <MonitorPlay className="h-4 w-4" /> Acesso Remoto
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="suporte" className="glass rounded-2xl p-6 border border-border/40 space-y-4">
+          <div className="flex flex-col gap-2 mb-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2"><MonitorPlay className="h-5 w-5 text-primary" /> Dar Suporte (VNC)</h2>
+            <p className="text-sm text-muted-foreground">
+              Acesse o dashboard de oficinas que liberaram o acesso para suporte. Ao clicar em acessar, você será logado na conta do cliente em uma nova aba.
+            </p>
+          </div>
+          <div className="overflow-x-auto border border-border/40 rounded-xl">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-secondary/40 border-b border-border/40 text-muted-foreground text-left">
+                  <th className="p-3.5 font-semibold">Oficina</th>
+                  <th className="p-3.5 font-semibold">Proprietário</th>
+                  <th className="p-3.5 font-semibold text-center">Status Suporte</th>
+                  <th className="p-3.5 font-semibold text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {workshops.filter(w => w.support_enabled).map(w => (
+                  <tr key={w.id} className="hover:bg-secondary/15 transition-colors">
+                    <td className="p-3.5 font-medium">
+                      <div className="text-foreground font-semibold">{w.name}</div>
+                      <div className="text-[10px] text-muted-foreground font-mono">/{w.slug}</div>
+                    </td>
+                    <td className="p-3.5">
+                      <div className="text-foreground">{w.owner_name}</div>
+                      <div className="text-muted-foreground font-mono text-[10px]">{w.owner_email}</div>
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] font-semibold uppercase tracking-wide">
+                        <CheckCircle2 className="h-3 w-3" /> Liberado
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-right">
+                      <Button
+                        size="sm"
+                        disabled={mGenerateSupport.isPending}
+                        onClick={() => mGenerateSupport.mutate(w.id)}
+                        className="h-8 px-3 text-[11px] gap-1.5 shadow-[0_0_15px_rgba(var(--primary),0.3)] hover:shadow-[0_0_25px_rgba(var(--primary),0.5)] transition-all"
+                      >
+                        {mGenerateSupport.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <MonitorPlay className="h-3 w-3" />}
+                        Acessar Dashboard
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                {workshops.filter(w => w.support_enabled).length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="p-12 text-center text-muted-foreground">
+                      Nenhuma oficina com acesso de suporte liberado no momento.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </TabsContent>
 
         <TabsContent value="clientes" className="glass rounded-2xl p-6 border border-border/40 space-y-4">
         {/* Search & Filter Header */}
