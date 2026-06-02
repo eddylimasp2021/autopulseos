@@ -156,7 +156,8 @@ function Page() {
         w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         w.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
         w.owner_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        w.owner_name.toLowerCase().includes(searchTerm.toLowerCase());
+        w.owner_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (w.cnpj ?? "").toLowerCase().includes(searchTerm.toLowerCase());
 
       // Plan type tab filter
       if (selectedPlanFilter === "all") return matchesSearch;
