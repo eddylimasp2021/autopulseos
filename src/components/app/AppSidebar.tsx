@@ -59,7 +59,7 @@ export function AppSidebar() {
   const isCreator = isSuperAdmin || userEmail === "eddylimainformatica@gmail.com";
 
   const navItems = [...items];
-  if (isSuperAdmin) {
+  if (isCreator) {
     navItems.splice(navItems.length - 1, 0, { to: "/app/saas", label: "Painel SaaS", icon: Shield });
   }
   const plan = workshop?.plan || "trial";
