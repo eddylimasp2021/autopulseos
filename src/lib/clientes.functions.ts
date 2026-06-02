@@ -34,7 +34,7 @@ export const listClientes = createServerFn({ method: "GET" }).handler(async ({ c
   const { supabase } = context as any;
   const { data, error } = await supabase
     .from("clientes")
-    .select("id,nome,telefone,email,documento,cidade,estado,created_at")
+    .select("id,nome,telefone,email,documento,endereco,cidade,estado,cep,observacoes,created_at")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return data ?? [];

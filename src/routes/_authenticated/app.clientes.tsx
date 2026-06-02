@@ -35,7 +35,7 @@ const Schema = z.object({
   observacoes: z.string().trim().max(1000).optional(),
 });
 type FormData = z.infer<typeof Schema>;
-type Cliente = { id: string; nome: string; telefone: string | null; email: string | null; documento: string | null; cidade: string | null; estado: string | null };
+type Cliente = { id: string; nome: string; telefone: string | null; email: string | null; documento: string | null; endereco: string | null; cidade: string | null; estado: string | null; cep: string | null; observacoes: string | null };
 
 function Page() {
   const [busca, setBusca] = useState("");
@@ -199,11 +199,11 @@ function ClienteDialog({ open, onOpenChange, editing, onSubmit, loading }: {
       telefone: editing?.telefone ?? "",
       email: editing?.email ?? "",
       documento: editing?.documento ?? "",
-      endereco: "",
+      endereco: editing?.endereco ?? "",
       cidade: editing?.cidade ?? "",
       estado: editing?.estado ?? "",
-      cep: "",
-      observacoes: "",
+      cep: editing?.cep ?? "",
+      observacoes: editing?.observacoes ?? "",
     },
   });
   const { register, handleSubmit, formState: { errors } } = form;

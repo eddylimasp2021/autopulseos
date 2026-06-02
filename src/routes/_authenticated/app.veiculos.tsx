@@ -28,7 +28,7 @@ const Schema = z.object({
   km_atual: z.string().optional(),
 });
 type FormData = z.infer<typeof Schema>;
-type Veiculo = { id: string; cliente_id: string; placa: string; marca: string | null; modelo: string | null; ano: number | null; cor: string | null; km_atual: number | null; clientes?: { nome: string } | null };
+type Veiculo = { id: string; cliente_id: string; placa: string; marca: string | null; modelo: string | null; ano: number | null; cor: string | null; combustivel: string | null; km_atual: number | null; observacoes: string | null; clientes?: { nome: string } | null };
 
 function Page() {
   const [busca, setBusca] = useState("");
@@ -156,7 +156,7 @@ function VeiculoDialog({ open, onOpenChange, editing, clientes, onSubmit, loadin
       modelo: editing?.modelo ?? "",
       ano: editing?.ano?.toString() ?? "",
       cor: editing?.cor ?? "",
-      combustivel: "",
+      combustivel: editing?.combustivel ?? "",
       km_atual: editing?.km_atual?.toString() ?? "",
     },
   });

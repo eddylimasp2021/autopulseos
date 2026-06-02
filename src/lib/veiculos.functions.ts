@@ -27,7 +27,7 @@ export const listVeiculos = createServerFn({ method: "GET" }).handler(async ({ c
   const { supabase } = context as any;
   const { data, error } = await supabase
     .from("veiculos")
-    .select("id,cliente_id,placa,marca,modelo,ano,cor,km_atual,created_at,clientes(nome)")
+    .select("id,cliente_id,placa,marca,modelo,ano,cor,combustivel,km_atual,observacoes,created_at,clientes(nome)")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return data ?? [];

@@ -46,7 +46,7 @@ export const listEstoque = createServerFn({ method: "GET" }).handler(async ({ co
   const { supabase } = context as any;
   const { data, error } = await supabase
     .from("estoque_itens")
-    .select("id,nome,codigo,categoria,unidade,quantidade,qtd_minima,preco_custo,preco_venda,fornecedor,ativo,created_at,imagem_url")
+    .select("id,nome,codigo,categoria,unidade,quantidade,qtd_minima,preco_custo,preco_venda,fornecedor,observacoes,ativo,created_at,imagem_url")
     .eq("ativo", true)
     .order("nome", { ascending: true });
   if (error) throw new Error(error.message);
