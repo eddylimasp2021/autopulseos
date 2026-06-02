@@ -276,7 +276,7 @@ function Page() {
             <Input
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar por Oficina, Dono, E-mail ou Slug..."
+              placeholder="Buscar por Oficina, Dono, E-mail, CNPJ ou Slug..."
               className="pl-9 h-9 text-xs bg-secondary/30"
             />
           </div>
