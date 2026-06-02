@@ -89,3 +89,32 @@ export const listTeam = createServerFn({ method: "GET" }).handler(async ({ conte
   }
   return (members ?? []).map((m: any) => ({ ...m, profile: profilesById[m.user_id] ?? null }));
 });
+
+export const getWorkshopBackupData = createServerFn({ method: "GET" }).handler(async ({ context }) => {
+  const { supabase } = context as any;
+
+  // Buscar todos os dados relevantes
+  const { data: clientes } = await supabase.from("clientes").select("*");
+  const { data: veiculos } = await supabase.from("veiculos").select("*");
+  const { data: ordens } = await supabase.from("ordens_servico").select("*");
+  const { data: os_itens } = await supabase.from("os_itens").select("*");
+  const { data: estoque } = await supabase.from("estoque_itens").select("*");
+  const { data: lancamentos } = await supabase.from("financeiro_lancamentos").select("*");
+  const { data: caixas } = await supabase.from("pdv_caixas").select("*");
+  const { data: oleo } = await supabase.from("troca_oleo").select("*");
+
+  return {
+    exported_at: new Date().toISOString(),
+    schema_version: "1.0",
+    data: {
+      clientes: clientes ?? [],
+      veiculos: veiculos ?? [],
+      ordens_servico: ordens ?? [],
+      os_itens: os_itens ?? [],
+      estoque_itens: estoque ?? [],
+      financeiro_lancamentos: lancamentos ?? [],
+      pdv_caixas: caixas ?? [],
+      troca_oleo: oleo ?? []
+    }
+  };
+});
