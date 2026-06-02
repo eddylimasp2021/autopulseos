@@ -11,6 +11,8 @@ import { listOrdens, getOrdem, updateOrdemStatus } from "@/lib/ordens.functions"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { imprimirCupomNaoFiscal, imprimirAberturaCaixa, imprimirFechamentoCaixa } from "@/lib/print";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/_authenticated/app/pdv")({ component: Page });
 
@@ -65,12 +67,19 @@ function Page() {
 
   const [saldoAbertura, setSaldoAbertura] = useState("");
   const [modalFechamento, setModalFechamento] = useState(false);
+  const [saldoFechamentoInformado, setSaldoFechamentoInformado] = useState("");
 
   const { data: resumoCaixa, isLoading: loadingResumo } = useQuery({
     queryKey: ["pdv-caixa-resumo", caixaAtual?.id],
     queryFn: () => getResumoFn({ data: { caixa_id: caixaAtual?.id! } }),
     enabled: !!caixaAtual?.id && modalFechamento
   });
+
+  useEffect(() => {
+    if (!modalFechamento) {
+      setSaldoFechamentoInformado("");
+    }
+  }, [modalFechamento]);
 
   const categorias = Array.from(new Set((produtos as Produto[]).map(p => p.categoria).filter(Boolean) as string[]));
   const catalogo = (produtos as Produto[]).filter(p => {
@@ -102,7 +111,12 @@ function Page() {
   });
 
   const mFechar = useMutation({
-    mutationFn: () => mFecharCaixa({ data: { caixa_id: caixaAtual?.id! } }),
+    mutationFn: () => mFecharCaixa({ 
+      data: { 
+        caixa_id: caixaAtual?.id!, 
+        saldo_dinheiro_informado: Number(saldoFechamentoInformado.replace(",", ".")) || 0 
+      } 
+    }),
     onSuccess: (resumo) => {
       toast.success("Caixa fechado com sucesso!");
       imprimirFechamentoCaixa({
@@ -392,9 +406,47 @@ function Page() {
               </div>
             ) : null}
 
+            {resumoCaixa && (
+              <div className="mb-6 space-y-2">
+                <Label htmlFor="saldo_fechamento_informado" className="text-xs font-semibold text-foreground">
+                  Confirmar Valor Físico em Dinheiro no Caixa (Gaveta) *
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">R$</span>
+                  <Input
+                    id="saldo_fechamento_informado"
+                    value={saldoFechamentoInformado}
+                    onChange={(e) => setSaldoFechamentoInformado(e.target.value)}
+                    placeholder="0,00"
+                    required
+                    className="pl-8 bg-secondary/35 text-sm font-semibold"
+                  />
+                </div>
+                {saldoFechamentoInformado && (
+                  <div className="text-[11px] font-semibold mt-1">
+                    {(() => {
+                      const informado = Number(saldoFechamentoInformado.replace(",", ".")) || 0;
+                      const esperado = resumoCaixa.dinheiro + resumoCaixa.saldo_abertura;
+                      const diferenca = informado - esperado;
+                      if (diferenca === 0) {
+                        return <span className="text-emerald-400">Caixa perfeito (sem diferença)</span>;
+                      } else if (diferenca > 0) {
+                        return <span className="text-sky-400">Sobra de caixa: + {diferenca.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>;
+                      } else {
+                        return <span className="text-red-400">Diferença de caixa (quebra): - {Math.abs(diferenca).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>;
+                      }
+                    })()}
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Digite a quantidade exata de cédulas e moedas (em espécie) contadas na gaveta do caixa.
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-3 justify-end">
               <button onClick={() => setModalFechamento(false)} className="px-4 py-2.5 text-sm font-medium rounded-xl border border-border/60 hover:bg-secondary/80 transition">Cancelar</button>
-              <button onClick={() => mFechar.mutate()} disabled={mFechar.isPending || loadingResumo} className="px-5 py-2.5 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-50 flex items-center gap-2">
+              <button onClick={() => mFechar.mutate()} disabled={mFechar.isPending || loadingResumo || !saldoFechamentoInformado} className="px-5 py-2.5 text-sm font-medium rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition disabled:opacity-50 flex items-center gap-2">
                 {mFechar.isPending ? "Calculando..." : "Confirmar Fechamento"}
               </button>
             </div>

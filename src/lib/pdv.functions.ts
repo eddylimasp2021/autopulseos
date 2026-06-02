@@ -126,7 +126,8 @@ export const abrirCaixa = createServerFn({ method: "POST" })
   });
 
 const FecharCaixaInput = z.object({
-  caixa_id: z.string().uuid()
+  caixa_id: z.string().uuid(),
+  saldo_dinheiro_informado: z.coerce.number().min(0).default(0)
 });
 
 export const fecharCaixa = createServerFn({ method: "POST" })
@@ -154,6 +155,7 @@ export const fecharCaixa = createServerFn({ method: "POST" })
       .update({
         status: "fechado",
         saldo_fechamento: totalGeral,
+        saldo_dinheiro_informado: data.saldo_dinheiro_informado,
         data_fechamento: new Date().toISOString()
       })
       .eq("id", data.caixa_id)
