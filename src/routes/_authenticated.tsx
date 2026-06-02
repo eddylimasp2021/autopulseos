@@ -83,6 +83,7 @@ function AuthLayoutError({ reset }: { error: Error; reset: () => void }) {
         <h1 className="text-2xl font-semibold text-foreground">Não foi possível validar sua sessão</h1>
         <p className="text-sm text-muted-foreground">
           Tente novamente para recarregar seus dados com segurança.
+          <br/><br/>Detalhe do Erro: {error.message}
         </p>
         <button
           onClick={() => {
