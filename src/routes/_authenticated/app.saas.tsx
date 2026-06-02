@@ -1,0 +1,444 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Shield, Users, Building, CreditCard, Search, Edit3, Calendar,
+  AlertTriangle, Lock, Unlock, ArrowUpRight, HelpCircle, Loader2, CheckCircle2,
+  Trash2
+} from "lucide-react";
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { listWorkshopsAdmin, updateWorkshopPlanAdmin } from "@/lib/saas.functions";
+
+export const Route = createFileRoute("/_authenticated/app/saas")({ component: Page });
+
+interface WorkshopAdmin {
+  id: string;
+  name: string;
+  slug: string;
+  plan: "trial" | "basico" | "profissional" | "premium";
+  trial_ends_at: string | null;
+  created_at: string;
+  updated_at: string;
+  owner_name: string;
+  owner_email: string;
+}
+
+const planBadges: Record<string, { label: string; className: string }> = {
+  trial: { label: "Trial/Testes", className: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
+  basico: { label: "Plano Básico", className: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  profissional: { label: "Profissional", className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+  premium: { label: "Plano Premium", className: "bg-violet-500/10 text-violet-400 border-violet-500/20" },
+};
+
+function Page() {
+  const qc = useQueryClient();
+  const getWorkshops = useServerFn(listWorkshopsAdmin);
+  const updatePlan = useServerFn(updateWorkshopPlanAdmin);
+
+  // Queries
+  const { data: workshops = [], isLoading } = useQuery<WorkshopAdmin[]>({
+    queryKey: ["admin-workshops"],
+    queryFn: () => getWorkshops(),
+  });
+
+  // State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>("all");
+  
+  // Dialog State
+  const [editOpen, setEditOpen] = useState(false);
+  const [selectedWorkshop, setSelectedWorkshop] = useState<WorkshopAdmin | null>(null);
+  const [newPlan, setNewPlan] = useState<"trial" | "basico" | "profissional" | "premium">("trial");
+  const [trialEndsAt, setTrialEndsAt] = useState("");
+
+  // Mutations
+  const mUpdatePlan = useMutation({
+    mutationFn: (payload: { workshop_id: string; plan: typeof newPlan; trial_ends_at?: string | null }) => 
+      updatePlan({ data: payload }),
+    onSuccess: () => {
+      toast.success("Plano da oficina atualizado com sucesso!");
+      qc.invalidateQueries({ queryKey: ["admin-workshops"] });
+      setEditOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(`Falha ao atualizar plano: ${err.message}`);
+    }
+  });
+
+  // Open plan edit dialog
+  const handleOpenEdit = (w: WorkshopAdmin) => {
+    setSelectedWorkshop(w);
+    setNewPlan(w.plan);
+    setTrialEndsAt(w.trial_ends_at ? w.trial_ends_at.slice(0, 10) : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    setEditOpen(true);
+  };
+
+  // Quick Action: Block/Suspend access (sets plan to 'trial' and trial_ends_at to past)
+  const handleBlockAccess = (w: WorkshopAdmin) => {
+    const confirmBlock = window.confirm(`Deseja realmente bloquear/suspender o acesso da oficina "${w.name}"? O plano será redefinido para Trial expirado.`);
+    if (confirmBlock) {
+      mUpdatePlan.mutate({
+        workshop_id: w.id,
+        plan: "trial",
+        trial_ends_at: "2000-01-01T00:00:00.000Z"
+      });
+    }
+  };
+
+  // Quick Action: Activate Professional Plan directly
+  const handleQuickActivate = (w: WorkshopAdmin) => {
+    const confirmActivate = window.confirm(`Deseja realmente ativar o Plano Profissional imediatamente para "${w.name}"?`);
+    if (confirmActivate) {
+      mUpdatePlan.mutate({
+        workshop_id: w.id,
+        plan: "profissional",
+        trial_ends_at: null
+      });
+    }
+  };
+
+  // Submits plan update
+  const handleSubmitPlan = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWorkshop) return;
+
+    mUpdatePlan.mutate({
+      workshop_id: selectedWorkshop.id,
+      plan: newPlan,
+      trial_ends_at: newPlan === "trial" ? new Date(trialEndsAt + "T23:59:59Z").toISOString() : null
+    });
+  };
+
+  // Calculated stats
+  const stats = useMemo(() => {
+    const total = workshops.length;
+    const trials = workshops.filter(w => w.plan === "trial").length;
+    const paid = total - trials;
+    
+    // Check if trial is expired
+    const now = new Date();
+    const expiredTrials = workshops.filter(w => {
+      if (w.plan !== "trial") return false;
+      if (!w.trial_ends_at) return false;
+      return new Date(w.trial_ends_at) < now;
+    }).length;
+
+    return { total, trials, paid, expiredTrials };
+  }, [workshops]);
+
+  // Filtered workshops
+  const filteredWorkshops = useMemo(() => {
+    return workshops.filter(w => {
+      // Search text filter
+      const matchesSearch = 
+        w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        w.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        w.owner_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        w.owner_name.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Plan type tab filter
+      if (selectedPlanFilter === "all") return matchesSearch;
+      if (selectedPlanFilter === "trial") return matchesSearch && w.plan === "trial";
+      if (selectedPlanFilter === "paid") return matchesSearch && w.plan !== "trial";
+      return matchesSearch && w.plan === selectedPlanFilter;
+    });
+  }, [workshops, searchTerm, selectedPlanFilter]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <motion.div 
+        initial={{ opacity: 0, y: 8 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 border border-primary/20">
+            <Shield className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Painel SaaS</h1>
+            <p className="text-sm text-muted-foreground mt-1">Gerenciamento administrativo de clientes, planos e acessos</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 rounded-full glass px-4 py-1.5 text-xs self-start sm:self-auto">
+          <span className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_currentColor]" />
+          <span className="text-muted-foreground">Console do Criador Ativo</span>
+        </div>
+      </motion.div>
+
+      {/* KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Total de Oficinas", value: stats.total, icon: Building, color: "text-primary" },
+          { label: "Assinaturas Ativas (Pagas)", value: stats.paid, icon: CreditCard, color: "text-emerald-400" },
+          { label: "Oficinas em Trial", value: stats.trials, icon: Users, color: "text-amber-400" },
+          { label: "Trials Expirados", value: stats.expiredTrials, icon: AlertTriangle, color: "text-destructive" },
+        ].map((k, idx) => (
+          <motion.div
+            key={k.label}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.05 }}
+            className="glass rounded-2xl p-5 relative overflow-hidden group hover:border-primary/20 transition-colors"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wider">{k.label}</div>
+                <div className="mt-2 text-2xl font-semibold font-display">{k.value}</div>
+              </div>
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-secondary/80 border border-border/60">
+                <k.icon className={cn("h-4 w-4", k.color)} />
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Main Panel Box */}
+      <div className="glass rounded-2xl p-6 border border-border/40 space-y-4">
+        {/* Search & Filter Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { key: "all", label: "Todas" },
+              { key: "trial", label: "Apenas Trial" },
+              { key: "paid", label: "Apenas Pagos" },
+              { key: "basico", label: "Básico" },
+              { key: "profissional", label: "Profissional" },
+              { key: "premium", label: "Premium" },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setSelectedPlanFilter(tab.key)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-medium transition",
+                  selectedPlanFilter === tab.key
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary/40 text-muted-foreground hover:bg-secondary"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative max-w-sm w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Buscar por Oficina, Dono, E-mail ou Slug..."
+              className="pl-9 h-9 text-xs bg-secondary/30"
+            />
+          </div>
+        </div>
+
+        {/* Clients Table */}
+        {isLoading ? (
+          <div className="p-20 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span>Carregando lista de clientes do SaaS...</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-border/40 rounded-xl">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-secondary/40 border-b border-border/40 text-muted-foreground text-left">
+                  <th className="p-3.5 font-semibold">Oficina / Slug</th>
+                  <th className="p-3.5 font-semibold">Proprietário / E-mail</th>
+                  <th className="p-3.5 font-semibold">Plano</th>
+                  <th className="p-3.5 font-semibold">Status / Trial Ends</th>
+                  <th className="p-3.5 font-semibold">Data Cadastro</th>
+                  <th className="p-3.5 font-semibold text-right">Ações de Controle</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {filteredWorkshops.map(w => {
+                  const now = new Date();
+                  const trialEnds = w.trial_ends_at ? new Date(w.trial_ends_at) : null;
+                  const isExpired = w.plan === "trial" && trialEnds && trialEnds < now;
+                  
+                  return (
+                    <tr key={w.id} className="hover:bg-secondary/15 transition-colors">
+                      <td className="p-3.5 font-medium">
+                        <div className="text-foreground font-semibold">{w.name}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">/{w.slug}</div>
+                      </td>
+                      <td className="p-3.5">
+                        <div className="text-foreground">{w.owner_name}</div>
+                        <div className="text-muted-foreground font-mono text-[10px]">{w.owner_email}</div>
+                      </td>
+                      <td className="p-3.5">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded border text-[9px] font-semibold uppercase tracking-wide",
+                          planBadges[w.plan]?.className || "bg-secondary text-muted-foreground"
+                        )}>
+                          {planBadges[w.plan]?.label || w.plan}
+                        </span>
+                      </td>
+                      <td className="p-3.5 font-mono">
+                        {w.plan === "trial" ? (
+                          isExpired ? (
+                            <span className="text-destructive font-semibold">Expirado em {trialEnds?.toLocaleDateString("pt-BR")}</span>
+                          ) : (
+                            <span className="text-amber-400">Ativo até {trialEnds?.toLocaleDateString("pt-BR")}</span>
+                          )
+                        ) : (
+                          <span className="text-emerald-400 font-semibold">Sem expiração (Ativo)</span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-muted-foreground">
+                        {new Date(w.created_at).toLocaleDateString("pt-BR")}
+                      </td>
+                      <td className="p-3.5 text-right space-x-1">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleOpenEdit(w)}
+                          className="h-7 px-2.5 text-[10px] gap-1 hover:border-primary/40"
+                        >
+                          <Edit3 className="h-3 w-3" /> Alterar Plano
+                        </Button>
+                        
+                        {w.plan === "trial" && !isExpired && (
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => handleBlockAccess(w)}
+                            className="h-7 px-2.5 text-[10px] bg-red-950/40 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white"
+                          >
+                            <Lock className="h-3 w-3" /> Bloquear
+                          </Button>
+                        )}
+
+                        {w.plan === "trial" && isExpired && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleQuickActivate(w)}
+                            className="h-7 px-2.5 text-[10px] text-emerald-400 hover:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/10"
+                          >
+                            <Unlock className="h-3 w-3" /> Reativar
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredWorkshops.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-12 text-center text-muted-foreground">
+                      Nenhuma oficina localizada com os filtros fornecidos.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Plan Edit Modal */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="glass border-border/50 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-display">
+              <Edit3 className="h-5 w-5 text-primary" /> Alterar Assinatura do Cliente
+            </DialogTitle>
+          </DialogHeader>
+          {selectedWorkshop && (
+            <form onSubmit={handleSubmitPlan} className="space-y-4">
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Oficina selecionada</div>
+                <div className="font-semibold text-sm text-foreground">{selectedWorkshop.name}</div>
+                <div className="text-[10px] text-muted-foreground font-mono">Dono: {selectedWorkshop.owner_name} ({selectedWorkshop.owner_email})</div>
+              </div>
+
+              {/* Plan Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="plan-select" className="text-xs font-semibold">Selecione o Plano da Assinatura</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: "trial" as const, label: "Trial / Testes" },
+                    { key: "basico" as const, label: "Plano Básico" },
+                    { key: "profissional" as const, label: "Profissional" },
+                    { key: "premium" as const, label: "Plano Premium" },
+                  ].map(p => (
+                    <button
+                      type="button"
+                      key={p.key}
+                      onClick={() => setNewPlan(p.key)}
+                      className={cn(
+                        "p-3 rounded-xl border text-xs font-semibold text-center transition flex flex-col items-center justify-center gap-1.5",
+                        newPlan === p.key 
+                          ? "bg-primary/10 border-primary text-primary" 
+                          : "bg-secondary/40 border-border/50 text-muted-foreground hover:bg-secondary"
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Trial Date Field */}
+              {newPlan === "trial" && (
+                <div className="space-y-2">
+                  <Label htmlFor="trial-date" className="text-xs font-semibold">Término do Período de Testes (Trial)</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="trial-date"
+                      type="date"
+                      value={trialEndsAt}
+                      onChange={e => setTrialEndsAt(e.target.value)}
+                      className="pl-9 bg-secondary/30 text-xs"
+                      required
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Ao atingir esta data, o acesso do cliente será automaticamente suspenso até que ele adquira um plano.
+                  </p>
+                </div>
+              )}
+
+              {newPlan !== "trial" && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-[10px] leading-relaxed">
+                  <strong>Aviso:</strong> A ativação de um plano pago remove o controle de data do Trial. O cliente terá acesso contínuo e ilimitado às funcionalidades contratadas.
+                </div>
+              )}
+
+              <DialogFooter className="pt-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setEditOpen(false)}
+                  disabled={mUpdatePlan.isPending}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={mUpdatePlan.isPending}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                >
+                  {mUpdatePlan.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  Salvar Alterações
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

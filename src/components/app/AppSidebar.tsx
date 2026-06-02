@@ -34,16 +34,34 @@ export function AppSidebar() {
   const fnGetW = useServerFn(getWorkshop);
   const { data: workshop } = useQuery({ queryKey: ["workshop"], queryFn: () => fnGetW() });
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
         setUserEmail(data.user.email ?? null);
+        
+        supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", data.user.id)
+          .eq("role", "super_admin")
+          .maybeSingle()
+          .then(({ data: roleData, error }) => {
+            if (!error && roleData) {
+              setIsSuperAdmin(true);
+            }
+          });
       }
     });
   }, []);
 
-  const isCreator = userEmail === "eddylimainformatica@gmail.com";
+  const isCreator = isSuperAdmin || userEmail === "eddylimainformatica@gmail.com";
+
+  const navItems = [...items];
+  if (isSuperAdmin) {
+    navItems.splice(navItems.length - 1, 0, { to: "/app/saas", label: "Painel SaaS", icon: Shield });
+  }
   const plan = workshop?.plan || "trial";
   const isTrial = plan === "trial";
   
@@ -78,7 +96,7 @@ export function AppSidebar() {
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-        {items.map((it) => {
+        {navItems.map((it) => {
           const active = it.end ? path === it.to : path === it.to || path.startsWith(it.to + "/");
           const Icon = it.icon;
           return (

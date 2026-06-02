@@ -17,6 +17,7 @@ import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedAppWhatsappRouteImport } from './routes/_authenticated/app.whatsapp'
 import { Route as AuthenticatedAppVeiculosRouteImport } from './routes/_authenticated/app.veiculos'
 import { Route as AuthenticatedAppTrocaOleoRouteImport } from './routes/_authenticated/app.troca-oleo'
+import { Route as AuthenticatedAppSaasRouteImport } from './routes/_authenticated/app.saas'
 import { Route as AuthenticatedAppRelatoriosRouteImport } from './routes/_authenticated/app.relatorios'
 import { Route as AuthenticatedAppPdvRouteImport } from './routes/_authenticated/app.pdv'
 import { Route as AuthenticatedAppOrdensRouteImport } from './routes/_authenticated/app.ordens'
@@ -72,6 +73,11 @@ const AuthenticatedAppTrocaOleoRoute =
     path: '/troca-oleo',
     getParentRoute: () => AuthenticatedAppRoute,
   } as any)
+const AuthenticatedAppSaasRoute = AuthenticatedAppSaasRouteImport.update({
+  id: '/saas',
+  path: '/saas',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
 const AuthenticatedAppRelatoriosRoute =
   AuthenticatedAppRelatoriosRouteImport.update({
     id: '/relatorios',
@@ -154,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/app/pdv': typeof AuthenticatedAppPdvRoute
   '/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
+  '/app/saas': typeof AuthenticatedAppSaasRoute
   '/app/troca-oleo': typeof AuthenticatedAppTrocaOleoRoute
   '/app/veiculos': typeof AuthenticatedAppVeiculosRoute
   '/app/whatsapp': typeof AuthenticatedAppWhatsappRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/app/pdv': typeof AuthenticatedAppPdvRoute
   '/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
+  '/app/saas': typeof AuthenticatedAppSaasRoute
   '/app/troca-oleo': typeof AuthenticatedAppTrocaOleoRoute
   '/app/veiculos': typeof AuthenticatedAppVeiculosRoute
   '/app/whatsapp': typeof AuthenticatedAppWhatsappRoute
@@ -197,6 +205,7 @@ export interface FileRoutesById {
   '/_authenticated/app/ordens': typeof AuthenticatedAppOrdensRoute
   '/_authenticated/app/pdv': typeof AuthenticatedAppPdvRoute
   '/_authenticated/app/relatorios': typeof AuthenticatedAppRelatoriosRoute
+  '/_authenticated/app/saas': typeof AuthenticatedAppSaasRoute
   '/_authenticated/app/troca-oleo': typeof AuthenticatedAppTrocaOleoRoute
   '/_authenticated/app/veiculos': typeof AuthenticatedAppVeiculosRoute
   '/_authenticated/app/whatsapp': typeof AuthenticatedAppWhatsappRoute
@@ -220,6 +229,7 @@ export interface FileRouteTypes {
     | '/app/ordens'
     | '/app/pdv'
     | '/app/relatorios'
+    | '/app/saas'
     | '/app/troca-oleo'
     | '/app/veiculos'
     | '/app/whatsapp'
@@ -240,6 +250,7 @@ export interface FileRouteTypes {
     | '/app/ordens'
     | '/app/pdv'
     | '/app/relatorios'
+    | '/app/saas'
     | '/app/troca-oleo'
     | '/app/veiculos'
     | '/app/whatsapp'
@@ -262,6 +273,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/ordens'
     | '/_authenticated/app/pdv'
     | '/_authenticated/app/relatorios'
+    | '/_authenticated/app/saas'
     | '/_authenticated/app/troca-oleo'
     | '/_authenticated/app/veiculos'
     | '/_authenticated/app/whatsapp'
@@ -334,6 +346,13 @@ declare module '@tanstack/react-router' {
       path: '/troca-oleo'
       fullPath: '/app/troca-oleo'
       preLoaderRoute: typeof AuthenticatedAppTrocaOleoRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
+    '/_authenticated/app/saas': {
+      id: '/_authenticated/app/saas'
+      path: '/saas'
+      fullPath: '/app/saas'
+      preLoaderRoute: typeof AuthenticatedAppSaasRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
     '/_authenticated/app/relatorios': {
@@ -434,6 +453,7 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppOrdensRoute: typeof AuthenticatedAppOrdensRoute
   AuthenticatedAppPdvRoute: typeof AuthenticatedAppPdvRoute
   AuthenticatedAppRelatoriosRoute: typeof AuthenticatedAppRelatoriosRoute
+  AuthenticatedAppSaasRoute: typeof AuthenticatedAppSaasRoute
   AuthenticatedAppTrocaOleoRoute: typeof AuthenticatedAppTrocaOleoRoute
   AuthenticatedAppVeiculosRoute: typeof AuthenticatedAppVeiculosRoute
   AuthenticatedAppWhatsappRoute: typeof AuthenticatedAppWhatsappRoute
@@ -451,6 +471,7 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppOrdensRoute: AuthenticatedAppOrdensRoute,
   AuthenticatedAppPdvRoute: AuthenticatedAppPdvRoute,
   AuthenticatedAppRelatoriosRoute: AuthenticatedAppRelatoriosRoute,
+  AuthenticatedAppSaasRoute: AuthenticatedAppSaasRoute,
   AuthenticatedAppTrocaOleoRoute: AuthenticatedAppTrocaOleoRoute,
   AuthenticatedAppVeiculosRoute: AuthenticatedAppVeiculosRoute,
   AuthenticatedAppWhatsappRoute: AuthenticatedAppWhatsappRoute,
