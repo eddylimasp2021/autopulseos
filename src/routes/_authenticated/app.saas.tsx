@@ -5,7 +5,7 @@ import {
   AlertTriangle, Lock, Unlock, ArrowUpRight, HelpCircle, Loader2, CheckCircle2,
   Trash2, Save, Server, Webhook, Wallet, CheckCircle, Zap
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -59,7 +59,7 @@ function Page() {
     queryFn: () => getSaasConfig()
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (saasConfig) {
       setAsaasApiKey(saasConfig.asaas_api_key || "");
       setAsaasWebhookSecret(saasConfig.asaas_webhook_secret || "");
