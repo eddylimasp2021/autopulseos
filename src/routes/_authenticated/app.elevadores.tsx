@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wrench, Plus, Minus, Trash2, User, Car, Check, Play, ShoppingCart, Loader2, ArrowRightLeft, DollarSign } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Wrench, Plus, Minus, Trash2, User, Car, Check, Play, ShoppingCart, Loader2, ArrowRightLeft, DollarSign, Clock } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useForm } from "react-hook-form";
@@ -264,6 +264,60 @@ function BayCard({
   const [customPrice, setCustomPrice] = useState("0");
   const [loadingAction, setLoadingAction] = useState(false);
 
+  const [elapsedTime, setElapsedTime] = useState("");
+  const [timerStyle, setTimerStyle] = useState({
+    text: "text-emerald-400",
+    bg: "bg-emerald-500/10 border-emerald-500/20"
+  });
+
+  useEffect(() => {
+    if (!os?.data_abertura) return;
+
+    const calculateElapsed = () => {
+      const start = new Date(os.data_abertura).getTime();
+      const now = Date.now();
+      const diff = now - start;
+
+      if (diff <= 0) {
+        setElapsedTime("00:00:00");
+        setTimerStyle({
+          text: "text-emerald-400",
+          bg: "bg-emerald-500/10 border-emerald-500/20"
+        });
+        return;
+      }
+
+      const seconds = Math.floor((diff / 1000) % 60);
+      const minutes = Math.floor((diff / (1000 * 60)) % 60);
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+
+      const pad = (num: number) => String(num).padStart(2, "0");
+      setElapsedTime(`${pad(hours)}:${pad(minutes)}:${pad(seconds)}`);
+
+      // Under 2h = Green, Under 6h = Amber, 6h+ = Rose
+      if (diff < 7200000) {
+        setTimerStyle({
+          text: "text-emerald-400",
+          bg: "bg-emerald-500/10 border-emerald-500/20"
+        });
+      } else if (diff < 21600000) {
+        setTimerStyle({
+          text: "text-amber-400",
+          bg: "bg-amber-500/10 border-amber-500/20"
+        });
+      } else {
+        setTimerStyle({
+          text: "text-rose-400",
+          bg: "bg-rose-500/10 border-rose-500/20"
+        });
+      }
+    };
+
+    calculateElapsed();
+    const interval = setInterval(calculateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [os?.data_abertura]);
+
   const getOrdemFn = useServerFn(getOrdem);
 
   // Fetch items for this OS
@@ -402,6 +456,19 @@ function BayCard({
                 <Car className="h-3.5 w-3.5" /> {[os.veiculos?.marca, os.veiculos?.modelo].filter(Boolean).join(" ")} · {os.veiculos?.placa}
               </div>
             </div>
+
+            {/* Contador de Tempo em Atendimento */}
+            {elapsedTime && (
+              <div className={cn("flex items-center justify-between p-2.5 rounded-xl border text-xs font-semibold transition-all duration-300 shadow-sm", timerStyle.bg)}>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 animate-pulse" /> Tempo de Atendimento
+                </div>
+                <span className={cn("font-mono font-bold tabular-nums tracking-wide", timerStyle.text)}>
+                  {elapsedTime}
+                </span>
+              </div>
+            )}
+
 
             <div className="border-t border-border/40 pt-3">
               <div className="flex items-center justify-between mb-2">
