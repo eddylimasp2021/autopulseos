@@ -155,7 +155,7 @@ export const fecharCaixa = createServerFn({ method: "POST" })
       .update({
         status: "fechado",
         saldo_fechamento: totalGeral,
-        saldo_dinheiro_informado: data.saldo_dinheiro_informado,
+        observacoes: JSON.stringify({ saldo_dinheiro_informado: data.saldo_dinheiro_informado }),
         data_fechamento: new Date().toISOString()
       })
       .eq("id", data.caixa_id)
@@ -165,8 +165,19 @@ export const fecharCaixa = createServerFn({ method: "POST" })
 
     if (error) throw new Error(error.message);
     
+    let saldoDinheiroInformado = 0;
+    try {
+      if (caixa.observacoes) {
+        const parsed = JSON.parse(caixa.observacoes);
+        saldoDinheiroInformado = parsed.saldo_dinheiro_informado ?? 0;
+      }
+    } catch (e) {
+      // Ignorar se não for JSON
+    }
+
     return { 
       ...caixa,
+      saldo_dinheiro_informado: saldoDinheiroInformado,
       resumo: { dinheiro: totalDinheiro, pix: totalPix, credito: totalCredito, debito: totalDebito, total_vendas: totalGeral }
     };
   });
