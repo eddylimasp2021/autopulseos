@@ -125,3 +125,79 @@ export const deleteFornecedor = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { success: true };
   });
+
+const BulkImportInput = z.array(FornecedorInputSchema);
+export type BulkImportInputType = z.infer<typeof BulkImportInput>;
+
+export const bulkImportFornecedores = createServerFn({ method: "POST" })
+  .inputValidator((d: BulkImportInputType) => BulkImportInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    
+    // Normalizar dados (cnpj_cpf e email)
+    for (const r of data as any[]) {
+      if (r.cnpj_cpf) r.cnpj_cpf = String(r.cnpj_cpf).replace(/\D/g, "");
+      if (r.cnpj_cpf === "") r.cnpj_cpf = null;
+      if (r.email) r.email = String(r.email).trim().toLowerCase();
+      if (r.email === "") r.email = null;
+    }
+
+    const dedupMapDoc = new Map<string, any>();
+    const withoutDoc = [];
+    
+    for (const r of data) {
+      if (r.cnpj_cpf) dedupMapDoc.set(r.cnpj_cpf, r);
+      else withoutDoc.push(r);
+    }
+    
+    const dedupedWithDoc = Array.from(dedupMapDoc.values());
+    
+    let inserted = 0;
+    let updated = 0;
+
+    if (dedupedWithDoc.length > 0) {
+      const documentos = dedupedWithDoc.map((r) => r.cnpj_cpf);
+      const { data: existingRows, error: existingError } = await supabase
+        .from("fornecedores")
+        .select("id,cnpj_cpf")
+        .in("cnpj_cpf", documentos);
+
+      if (existingError) throw new Error(existingError.message);
+
+      const existingByDoc = new Map<string, { id: string }>();
+      for (const row of existingRows ?? []) {
+        if (row.cnpj_cpf) existingByDoc.set(String(row.cnpj_cpf).replace(/\D/g, ""), row as { id: string });
+      }
+
+      const toInsert = dedupedWithDoc.filter((row) => !existingByDoc.has(row.cnpj_cpf));
+      const toUpdate = dedupedWithDoc
+        .filter((row) => existingByDoc.has(row.cnpj_cpf))
+        .map((row) => ({ ...row, id: existingByDoc.get(row.cnpj_cpf)!.id }));
+
+      if (toInsert.length > 0) {
+        const { error, count } = await supabase.from("fornecedores").insert(toInsert, { count: "exact" });
+        if (error) throw new Error(error.message);
+        inserted += count ?? toInsert.length;
+      }
+
+      for (const row of toUpdate) {
+        const { id, ...payload } = row;
+        const { error } = await supabase.from("fornecedores").update(payload).eq("id", id);
+        if (error) throw new Error(error.message);
+      }
+      updated += toUpdate.length;
+    }
+
+    if (withoutDoc.length > 0) {
+      const { error, count } = await supabase.from("fornecedores").insert(withoutDoc, { count: "exact" });
+      if (error) throw new Error(error.message);
+      inserted += count ?? withoutDoc.length;
+    }
+
+    return {
+      ok: true,
+      processados: data.length,
+      inseridos: inserted,
+      atualizados: updated,
+    };
+  });
