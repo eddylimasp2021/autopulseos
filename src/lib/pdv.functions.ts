@@ -274,7 +274,7 @@ export const registrarReforco = createServerFn({ method: "POST" })
   });
 
 export const listVendasCaixa = createServerFn({ method: "GET" })
-  .validator((caixa_id: string) => caixa_id)
+  .inputValidator((caixa_id: string) => caixa_id)
   .handler(async ({ data: caixa_id, context }) => {
     const { supabase } = context as any;
     const { data, error } = await supabase
@@ -289,7 +289,7 @@ export const listVendasCaixa = createServerFn({ method: "GET" })
   });
 
 export const estornarVenda = createServerFn({ method: "POST" })
-  .validator((lancamento_id: string) => lancamento_id)
+  .inputValidator((lancamento_id: string) => lancamento_id)
   .handler(async ({ data: lancamento_id, context }) => {
     const { supabase } = context as any;
     
