@@ -4,7 +4,7 @@ import { z } from "zod";
 const Item = z.object({
   estoque_item_id: z.string().uuid().nullable().optional(),
   descricao: z.string().trim().min(1).max(200),
-  quantidade: z.coerce.number().min(0.001).max(99999),
+  quantidade: z.coerce.number().min(-99999).max(99999),
   valor_unit: z.coerce.number().min(0).max(99999999),
 });
 
@@ -13,7 +13,7 @@ const FinalizarInput = z.object({
   caixa_id: z.string().uuid(),
   pagamentos: z.array(z.object({
     forma: z.enum(["pix", "dinheiro", "cartao_credito", "cartao_debito"]),
-    valor: z.coerce.number().min(0)
+    valor: z.coerce.number()
   })).min(1),
   valor_recebido: z.coerce.number().min(0).max(99999999).optional().nullable(),
   desconto: z.coerce.number().min(0).max(99999999).optional().nullable(),
@@ -37,19 +37,20 @@ export const finalizarVenda = createServerFn({ method: "POST" })
   .inputValidator((d: FinalizarInputType) => FinalizarInput.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context as any;
-    const subtotal = data.itens.reduce((s, i) => s + i.quantidade * i.valor_unit, 0);
+    const subtotal = data.itens.reduce((s, i) => s + (i.quantidade * i.valor_unit), 0);
     const desconto = Number(data.desconto ?? 0);
-    const total = Math.max(0, subtotal - desconto);
+    const total = subtotal - desconto;
+    const isDevolucao = total < 0;
     const hoje = new Date().toISOString().slice(0, 10);
 
     const descBase = `Venda PDV (${data.itens.length} ${data.itens.length === 1 ? "item" : "itens"})`;
     const descricao = data.observacao ? `${descBase} | ${data.observacao}` : descBase;
 
-    const lancamentosAInserir = data.pagamentos.filter(p => p.valor > 0).map(p => ({
-        tipo: "receita",
-        categoria: "PDV",
+    const lancamentosAInserir = data.pagamentos.filter(p => p.valor !== 0).map(p => ({
+        tipo: p.valor < 0 ? "despesa" : "receita",
+        categoria: p.valor < 0 ? "Devolução PDV" : "PDV",
         descricao,
-        valor: p.valor,
+        valor: Math.abs(p.valor),
         data_vencimento: hoje,
         data_pagamento: hoje,
         status: "pago",
@@ -73,16 +74,16 @@ export const finalizarVenda = createServerFn({ method: "POST" })
       if (it.estoque_item_id) {
         const { error: em } = await supabase.from("estoque_movimentacoes").insert({
           item_id: it.estoque_item_id,
-          tipo: "saida",
-          quantidade: it.quantidade,
-          motivo: `PDV ${lancs[0].id.slice(0, 8)}`,
+          tipo: it.quantidade < 0 ? "entrada" : "saida",
+          quantidade: Math.abs(it.quantidade),
+          motivo: `PDV ${lancs[0]?.id?.slice(0, 8) || 'Devolução'}`,
         });
         if (em) throw new Error(em.message);
       }
     }
     
     const pagDinheiro = data.pagamentos.find(p => p.forma === "dinheiro");
-    const troco = pagDinheiro && data.valor_recebido != null
+    const troco = !isDevolucao && pagDinheiro && data.valor_recebido != null
       ? Math.max(0, Number(data.valor_recebido) - pagDinheiro.valor)
       : 0;
       
@@ -220,4 +221,123 @@ export const getResumoCaixa = createServerFn({ method: "POST" })
       total_vendas: totalVendas,
       total_geral: totalVendas + Number(caixa.saldo_abertura)
     };
+  });
+
+const SangriaReforcoInput = z.object({
+  caixa_id: z.string().uuid(),
+  valor: z.coerce.number().min(0.01),
+  observacao: z.string().trim().min(1).max(200),
+});
+
+export const registrarSangria = createServerFn({ method: "POST" })
+  .inputValidator((d: any) => SangriaReforcoInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    const hoje = new Date().toISOString().slice(0, 10);
+    
+    const { data: lanc, error } = await supabase.from("financeiro_lancamentos").insert({
+      tipo: "despesa",
+      categoria: "Sangria PDV",
+      descricao: `Sangria: ${data.observacao}`,
+      valor: data.valor,
+      data_vencimento: hoje,
+      data_pagamento: hoje,
+      status: "pago",
+      forma_pagamento: "dinheiro",
+      caixa_id: data.caixa_id,
+    }).select().single();
+
+    if (error) throw new Error(error.message);
+    return lanc;
+  });
+
+export const registrarReforco = createServerFn({ method: "POST" })
+  .inputValidator((d: any) => SangriaReforcoInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as any;
+    const hoje = new Date().toISOString().slice(0, 10);
+    
+    const { data: lanc, error } = await supabase.from("financeiro_lancamentos").insert({
+      tipo: "receita",
+      categoria: "Reforço PDV",
+      descricao: `Reforço: ${data.observacao}`,
+      valor: data.valor,
+      data_vencimento: hoje,
+      data_pagamento: hoje,
+      status: "pago",
+      forma_pagamento: "dinheiro",
+      caixa_id: data.caixa_id,
+    }).select().single();
+
+    if (error) throw new Error(error.message);
+    return lanc;
+  });
+
+export const listVendasCaixa = createServerFn({ method: "GET" })
+  .validator((caixa_id: string) => caixa_id)
+  .handler(async ({ data: caixa_id, context }) => {
+    const { supabase } = context as any;
+    const { data, error } = await supabase
+      .from("financeiro_lancamentos")
+      .select("*")
+      .eq("caixa_id", caixa_id)
+      .eq("categoria", "PDV")
+      .order("created_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
+export const estornarVenda = createServerFn({ method: "POST" })
+  .validator((lancamento_id: string) => lancamento_id)
+  .handler(async ({ data: lancamento_id, context }) => {
+    const { supabase } = context as any;
+    
+    const { data: lancOriginal, error: errBusca } = await supabase
+      .from("financeiro_lancamentos")
+      .select("*")
+      .eq("id", lancamento_id)
+      .single();
+      
+    if (errBusca) throw new Error(errBusca.message);
+    if (lancOriginal.categoria !== "PDV") throw new Error("Apenas vendas de PDV podem ser estornadas por aqui.");
+    if (lancOriginal.descricao.includes("[ESTORNADA]")) throw new Error("Esta venda já foi estornada.");
+
+    await supabase.from("financeiro_lancamentos").update({
+      descricao: `[ESTORNADA] ${lancOriginal.descricao}`
+    }).eq("id", lancamento_id);
+
+    const hoje = new Date().toISOString().slice(0, 10);
+    const { error: errEstorno } = await supabase.from("financeiro_lancamentos").insert({
+      tipo: "despesa",
+      categoria: "Estorno PDV",
+      descricao: `Estorno Ref: ${lancamento_id.slice(0, 8)}`,
+      valor: lancOriginal.valor,
+      data_vencimento: hoje,
+      data_pagamento: hoje,
+      status: "pago",
+      forma_pagamento: lancOriginal.forma_pagamento,
+      caixa_id: lancOriginal.caixa_id,
+    });
+    if (errEstorno) throw new Error(errEstorno.message);
+
+    const motivoBusca = `PDV ${lancamento_id.slice(0, 8)}`;
+    const { data: movs } = await supabase.from("estoque_movimentacoes")
+      .select("*")
+      .like("motivo", `${motivoBusca}%`);
+
+    if (movs && movs.length > 0) {
+      for (const m of movs) {
+        if (m.tipo === "saida") {
+          await supabase.from("estoque_movimentacoes").insert({
+            item_id: m.item_id,
+            tipo: "entrada",
+            quantidade: m.quantidade,
+            motivo: `Estorno PDV ${lancamento_id.slice(0, 8)}`
+          });
+        }
+      }
+    }
+    
+    return { success: true };
   });

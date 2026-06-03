@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet, LogOut, Keyboard, Loader2 } from "lucide-react";
+import { ShoppingCart, Search, Plus, Minus, Trash2, QrCode, CreditCard, Banknote, Receipt, Package, User, Percent, Wallet, LogOut, Keyboard, Loader2, History, ArrowDownToLine, ArrowUpFromLine, Undo } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { listEstoqueParaPDV, finalizarVenda, verificarCaixaAberto, abrirCaixa, fecharCaixa, getResumoCaixa } from "@/lib/pdv.functions";
+import { listEstoqueParaPDV, finalizarVenda, verificarCaixaAberto, abrirCaixa, fecharCaixa, getResumoCaixa, registrarSangria, registrarReforco, listVendasCaixa, estornarVenda } from "@/lib/pdv.functions";
 import { listClientes } from "@/lib/clientes.functions";
 import { listOrdens, getOrdem, updateOrdemStatus } from "@/lib/ordens.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -57,11 +57,15 @@ function Page() {
   const getOsFn = useServerFn(getOrdem);
   const updateOsStatusFn = useServerFn(updateOrdemStatus);
 
-  // Funções de Caixa
+  // Funções de Caixa e Movimentações
   const vCaixa = useServerFn(verificarCaixaAberto);
   const mAbrirCaixa = useServerFn(abrirCaixa);
   const mFecharCaixa = useServerFn(fecharCaixa);
   const getResumoFn = useServerFn(getResumoCaixa);
+  const mSangria = useServerFn(registrarSangria);
+  const mReforco = useServerFn(registrarReforco);
+  const mListVendas = useServerFn(listVendasCaixa);
+  const mEstornar = useServerFn(estornarVenda);
   const fnGetTef = useServerFn(getTefConfig);
 
   const { data: produtos = [] } = useQuery({ queryKey: ["pdv-estoque"], queryFn: () => listEst() });
@@ -88,6 +92,22 @@ function Page() {
   const [tefValor, setTefValor] = useState(0);
   const [tefTipo, setTefTipo] = useState("");
   const [tefPagamentoAdicionado, setTefPagamentoAdicionado] = useState<{ id: string, forma: FormaPagamento, valor: number } | null>(null);
+
+  // States para Sangria, Reforço, Devolução e Histórico
+  const [modalSangriaOpen, setModalSangriaOpen] = useState(false);
+  const [modalReforcoOpen, setModalReforcoOpen] = useState(false);
+  const [modalHistoricoOpen, setModalHistoricoOpen] = useState(false);
+  const [sangriaValor, setSangriaValor] = useState("");
+  const [sangriaObs, setSangriaObs] = useState("");
+  const [reforcoValor, setReforcoValor] = useState("");
+  const [reforcoObs, setReforcoObs] = useState("");
+  const [modoDevolucao, setModoDevolucao] = useState(false);
+
+  const { data: vendasHistory = [], isLoading: loadingHistory } = useQuery({
+    queryKey: ["pdv-historico-vendas", caixaAtual?.id],
+    queryFn: () => mListVendas({ data: caixaAtual?.id! }),
+    enabled: !!caixaAtual?.id && modalHistoricoOpen
+  });
 
   useEffect(() => {
     if (!modalFechamento) {
@@ -151,28 +171,62 @@ function Page() {
     onError: (e: Error) => toast.error(e.message)
   });
 
+  const mFazSangria = useMutation({
+    mutationFn: () => mSangria({ data: { caixa_id: caixaAtual?.id!, valor: Number(sangriaValor.replace(",", ".")), observacao: sangriaObs } }),
+    onSuccess: () => {
+      toast.success("Sangria registrada com sucesso!");
+      setModalSangriaOpen(false); setSangriaValor(""); setSangriaObs("");
+      qc.invalidateQueries({ queryKey: ["pdv-caixa-resumo"] });
+    },
+    onError: (e: Error) => toast.error(e.message)
+  });
+
+  const mFazReforco = useMutation({
+    mutationFn: () => mReforco({ data: { caixa_id: caixaAtual?.id!, valor: Number(reforcoValor.replace(",", ".")), observacao: reforcoObs } }),
+    onSuccess: () => {
+      toast.success("Reforço registrado com sucesso!");
+      setModalReforcoOpen(false); setReforcoValor(""); setReforcoObs("");
+      qc.invalidateQueries({ queryKey: ["pdv-caixa-resumo"] });
+    },
+    onError: (e: Error) => toast.error(e.message)
+  });
+
+  const mFazEstorno = useMutation({
+    mutationFn: (lanc_id: string) => mEstornar({ data: lanc_id }),
+    onSuccess: () => {
+      toast.success("Venda estornada com sucesso!");
+      qc.invalidateQueries({ queryKey: ["pdv-historico-vendas"] });
+      qc.invalidateQueries({ queryKey: ["pdv-caixa-resumo"] });
+      qc.invalidateQueries({ queryKey: ["pdv-estoque"] });
+    },
+    onError: (e: Error) => toast.error(e.message)
+  });
+
   const addToCart = (p: Produto) => {
-    if (Number(p.quantidade) <= 0) {
+    if (!modoDevolucao && Number(p.quantidade) <= 0) {
       toast.error(`${p.nome} sem estoque disponível`);
       return;
     }
     setCart(prev => {
+      const qtyToAdd = modoDevolucao ? -1 : 1;
       const ex = prev.find(x => x.id === p.id);
       if (ex) {
-        if (ex.qtd + 1 > ex.estoque) {
+        if (!modoDevolucao && ex.qtd + 1 > ex.estoque) {
           toast.error(`Estoque máximo de ${ex.estoque} para ${ex.nome}`);
           return prev;
         }
-        return prev.map(x => x.id === p.id ? { ...x, qtd: x.qtd + 1 } : x);
+        return prev.map(x => x.id === p.id ? { ...x, qtd: x.qtd + qtyToAdd } : x);
       }
-      return [...prev, { id: p.id, nome: p.nome, preco: Number(p.preco_venda), qtd: 1, estoque: Number(p.quantidade) }];
+      return [...prev, { id: p.id, nome: p.nome, preco: Number(p.preco_venda), qtd: qtyToAdd, estoque: Number(p.quantidade) }];
     });
   };
   const updateQtd = (id: string, delta: number) =>
     setCart(prev => prev.map(x => {
       if (x.id !== id) return x;
-      const next = Math.max(1, x.qtd + delta);
-      if (next > x.estoque) { toast.error(`Estoque máximo de ${x.estoque}`); return x; }
+      // Allow negative quantities natively now
+      const next = x.qtd + delta;
+      if (!modoDevolucao && next > x.estoque) { toast.error(`Estoque máximo de ${x.estoque}`); return x; }
+      if (next === 0) return { ...x, qtd: delta > 0 ? 1 : -1 }; // Skip 0
       return { ...x, qtd: next };
     }));
   const removeItem = (id: string) => setCart(prev => prev.filter(x => x.id !== id));
@@ -252,8 +306,8 @@ function Page() {
         pagamentos: isPagamentoMultiplo 
           ? pagamentosAdicionados.map(p => ({ forma: p.forma, valor: p.valor }))
           : [{ forma: formaPagamento, valor: total }],
-        desconto,
-        valor_recebido: (!isPagamentoMultiplo && formaPagamento === "dinheiro") ? recebido : null,
+        desconto: desconto > 0 ? desconto : null,
+        valor_recebido: (!isPagamentoMultiplo && formaPagamento === "dinheiro" && !modoDevolucao) ? recebido : null,
         observacao: observacao || null,
         itens: cart.map(c => {
           const isRealStockItem = (produtos as Produto[]).some(p => p.id === c.id);
@@ -470,6 +524,98 @@ function Page() {
         </div>
       )}
 
+      {/* MODAL SANGRIA */}
+      <Dialog open={modalSangriaOpen} onOpenChange={setModalSangriaOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowDownToLine className="h-5 w-5 text-red-500" /> Sangria de Caixa</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Valor da Retirada (R$)</Label>
+              <Input type="number" step="0.01" min="0" value={sangriaValor} onChange={e => setSangriaValor(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="space-y-2">
+              <Label>Motivo / Observação</Label>
+              <Input value={sangriaObs} onChange={e => setSangriaObs(e.target.value)} placeholder="Ex: Pagamento de fornecedor" />
+            </div>
+            <Button onClick={() => mFazSangria.mutate()} disabled={mFazSangria.isPending || !sangriaValor || !sangriaObs} className="w-full" variant="destructive">
+              {mFazSangria.isPending ? "Registrando..." : "Registrar Sangria"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL REFORÇO */}
+      <Dialog open={modalReforcoOpen} onOpenChange={setModalReforcoOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowUpFromLine className="h-5 w-5 text-emerald-500" /> Reforço de Caixa</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Valor da Entrada (R$)</Label>
+              <Input type="number" step="0.01" min="0" value={reforcoValor} onChange={e => setReforcoValor(e.target.value)} placeholder="0,00" />
+            </div>
+            <div className="space-y-2">
+              <Label>Motivo / Observação</Label>
+              <Input value={reforcoObs} onChange={e => setReforcoObs(e.target.value)} placeholder="Ex: Troco inicial" />
+            </div>
+            <Button onClick={() => mFazReforco.mutate()} disabled={mFazReforco.isPending || !reforcoValor || !reforcoObs} className="w-full bg-emerald-500 hover:bg-emerald-600">
+              {mFazReforco.isPending ? "Registrando..." : "Registrar Reforço"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL HISTÓRICO */}
+      <Dialog open={modalHistoricoOpen} onOpenChange={setModalHistoricoOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Histórico de Vendas do Caixa</DialogTitle></DialogHeader>
+          <div className="flex-1 overflow-y-auto mt-4">
+            {loadingHistory ? (
+              <div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : vendasHistory.length === 0 ? (
+              <p className="text-center text-muted-foreground p-4">Nenhuma venda registrada neste caixa ainda.</p>
+            ) : (
+              <table className="w-full text-sm text-left">
+                <thead className="bg-secondary/50 border-b border-border/50 sticky top-0">
+                  <tr className="text-xs uppercase text-muted-foreground">
+                    <th className="p-3">Data/Hora</th>
+                    <th className="p-3">Descrição</th>
+                    <th className="p-3">Valor</th>
+                    <th className="p-3">Forma</th>
+                    <th className="p-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {vendasHistory.map((l: any) => {
+                    const isEstornada = l.descricao.includes("[ESTORNADA]");
+                    return (
+                      <tr key={l.id} className={`hover:bg-secondary/30 ${isEstornada ? 'opacity-50' : ''}`}>
+                        <td className="p-3">{new Date(l.created_at).toLocaleTimeString('pt-BR')}</td>
+                        <td className="p-3 max-w-[200px] truncate" title={l.descricao}>{l.descricao}</td>
+                        <td className="p-3 tabular-nums">{Number(l.valor).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</td>
+                        <td className="p-3 capitalize">{l.forma_pagamento.replace('_', ' ')}</td>
+                        <td className="p-3 text-right">
+                          <Button 
+                            variant="destructive" size="sm" className="h-8" 
+                            disabled={isEstornada || mFazEstorno.isPending} 
+                            onClick={() => {
+                              if (confirm("Tem certeza que deseja estornar esta venda? Os itens retornarão ao estoque e o valor sairá do caixa.")) {
+                                mFazEstorno.mutate(l.id);
+                              }
+                            }}
+                          >
+                            <Undo className="h-3 w-3 mr-1" /> Estornar
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ImportarOSDialog 
         open={modalOSOpen} 
         onOpenChange={setModalOSOpen} 
@@ -503,6 +649,32 @@ function Page() {
           >
             <Receipt className="h-3.5 w-3.5" /> Importar OS
           </button>
+
+          <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>
+
+          <button 
+            onClick={() => setModalSangriaOpen(true)} 
+            className="text-xs font-medium text-red-500 hover:bg-red-500/10 transition px-3 py-2 rounded-xl border border-red-500/40 hover:border-red-500/60 flex items-center gap-1.5"
+            title="Retirar dinheiro do caixa"
+          >
+            <ArrowDownToLine className="h-3.5 w-3.5" /> Sangria
+          </button>
+          
+          <button 
+            onClick={() => setModalReforcoOpen(true)} 
+            className="text-xs font-medium text-emerald-500 hover:bg-emerald-500/10 transition px-3 py-2 rounded-xl border border-emerald-500/40 hover:border-emerald-500/60 flex items-center gap-1.5"
+            title="Adicionar troco no caixa"
+          >
+            <ArrowUpFromLine className="h-3.5 w-3.5" /> Reforço
+          </button>
+
+          <button 
+            onClick={() => setModalHistoricoOpen(true)} 
+            className="text-xs font-medium text-blue-500 hover:bg-blue-500/10 transition px-3 py-2 rounded-xl border border-blue-500/40 hover:border-blue-500/60 flex items-center gap-1.5"
+            title="Histórico e Estorno"
+          >
+            <History className="h-3.5 w-3.5" /> Histórico
+          </button>
           
           <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>
           
@@ -524,8 +696,18 @@ function Page() {
               onChange={e => setBusca(e.target.value)} 
               onKeyDown={onBuscaKeyDown}
               placeholder="Buscar produto ou bipar código (F2)" 
-              className="w-full rounded-xl border border-border bg-secondary/50 pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30" 
+              className={`w-full rounded-xl border bg-secondary/50 pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 ${modoDevolucao ? 'border-orange-500 focus:ring-orange-500/30' : 'border-border focus:ring-primary/30'}`} 
             />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setModoDevolucao(!modoDevolucao)}
+              className={`text-xs font-medium transition px-3 py-1.5 rounded-full border flex items-center gap-1.5 ${modoDevolucao ? 'bg-orange-500 text-white border-orange-600' : 'bg-secondary/40 text-muted-foreground border-border hover:bg-secondary'}`}
+            >
+              <Undo className="h-3.5 w-3.5" />
+              {modoDevolucao ? "Modo Devolução Ativo (Valores Negativos)" : "Ativar Modo Devolução"}
+            </button>
           </div>
 
           {categorias.length > 0 && (

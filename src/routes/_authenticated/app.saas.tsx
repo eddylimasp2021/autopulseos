@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, Building, CreditCard, Search, Edit3, Calendar,
   AlertTriangle, Lock, Unlock, ArrowUpRight, HelpCircle, Loader2, CheckCircle2,
-  Trash2, Save, Server, Webhook, Wallet, CheckCircle, Zap, MonitorPlay
+  Trash2, Save, Server, Webhook, Wallet, CheckCircle, Zap, MonitorPlay, FileSignature, Printer, MessageCircle, FileText, FileCheck, X
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { SignaturePad } from "@/components/app/SignaturePad";
 
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -16,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { listWorkshopsAdmin, updateWorkshopPlanAdmin, getSaasConfigAdmin, updateSaasConfigAdmin, generateSupportLink } from "@/lib/saas.functions";
+import { listWorkshopsAdmin, updateWorkshopPlanAdmin, getSaasConfigAdmin, updateSaasConfigAdmin, generateSupportLink, listContratosAdmin, createContratoAdmin, updateContratoAdmin, assinarContratoAdmin, deleteContratoAdmin } from "@/lib/saas.functions";
 
 export const Route = createFileRoute("/_authenticated/app/saas")({ component: Page });
 
@@ -69,7 +70,7 @@ function Page() {
   }, [saasConfig]);
 
   // State
-  const [activeTab, setActiveTab] = useState<"clientes" | "gateway" | "suporte">("clientes");
+  const [activeTab, setActiveTab] = useState<"clientes" | "gateway" | "suporte" | "contratos">("clientes");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlanFilter, setSelectedPlanFilter] = useState<string>("all");
   
@@ -115,6 +116,115 @@ function Page() {
     },
     onError: (err: any) => toast.error(err.message)
   });
+
+
+  // Contratos
+  const getContratos = useServerFn(listContratosAdmin);
+  const mCreateContrato = useMutation({
+    mutationFn: useServerFn(createContratoAdmin),
+    onSuccess: () => {
+      toast.success("Contrato gerado com sucesso!");
+      qc.invalidateQueries({ queryKey: ["saas-contratos"] });
+    },
+    onError: (err: any) => toast.error(err.message)
+  });
+  const mUpdateContrato = useMutation({
+    mutationFn: useServerFn(updateContratoAdmin),
+    onSuccess: () => {
+      toast.success("Contrato salvo com sucesso!");
+      qc.invalidateQueries({ queryKey: ["saas-contratos"] });
+    },
+    onError: (err: any) => toast.error(err.message)
+  });
+  const mAssinarContrato = useMutation({
+    mutationFn: useServerFn(assinarContratoAdmin),
+    onSuccess: () => {
+      toast.success("Contrato assinado!");
+      qc.invalidateQueries({ queryKey: ["saas-contratos"] });
+      setContratoVisualizar(null);
+    },
+    onError: (err: any) => toast.error(err.message)
+  });
+  const mDeleteContrato = useMutation({
+    mutationFn: useServerFn(deleteContratoAdmin),
+    onSuccess: () => {
+      toast.success("Contrato excluído!");
+      qc.invalidateQueries({ queryKey: ["saas-contratos"] });
+    },
+    onError: (err: any) => toast.error(err.message)
+  });
+
+  const { data: contratos = [] } = useQuery({
+    queryKey: ["saas-contratos"],
+    queryFn: () => getContratos()
+  });
+
+  const [novoContratoModal, setNovoContratoModal] = useState(false);
+  const [selectedWorkshopParaContrato, setSelectedWorkshopParaContrato] = useState("");
+  const [contratoVisualizar, setContratoVisualizar] = useState<any>(null);
+  const [htmlEdit, setHtmlEdit] = useState("");
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+
+  const handleGerarContrato = () => {
+    if (!selectedWorkshopParaContrato) return toast.error("Selecione um cliente");
+    const ws = workshops.find(w => w.id === selectedWorkshopParaContrato);
+    
+    const htmlPadrao = `
+<div style="font-family: sans-serif; line-height: 1.6;">
+  <h2 style="text-align: center;">CONTRATO DE LICENCIAMENTO DE USO DE SOFTWARE</h2>
+  
+  <p><strong>CONTRATADA:</strong> AutoPulse OS (Eddy Lima Informática), provedora da solução tecnológica.</p>
+  <p><strong>CONTRATANTE:</strong> ${ws?.name} ${ws?.cnpj ? `(CNPJ: ${ws.cnpj})` : ''}, representado por ${ws?.owner_name}.</p>
+  
+  <h3>CLÁUSULA 1 - DO OBJETO</h3>
+  <p>O presente instrumento tem por objeto o licenciamento do uso do software AutoPulse OS, na modalidade SaaS (Software as a Service), para a gestão da oficina mecânica do CONTRATANTE. O plano escolhido é o <strong>${ws?.plan.toUpperCase()}</strong>.</p>
+  
+  <h3>CLÁUSULA 2 - DO VALOR E FORMA DE PAGAMENTO</h3>
+  <p>O CONTRATANTE pagará à CONTRATADA o valor referente ao plano escolhido, mediante cobrança recorrente. O inadimplemento poderá acarretar na suspensão do acesso.</p>
+
+  <h3>CLÁUSULA 3 - DO SUPORTE E DISPONIBILIDADE</h3>
+  <p>A CONTRATADA garante suporte técnico e disponibilidade do sistema conforme os níveis de serviço acordados no plano, isentando-se de problemas decorrentes da infraestrutura local do CONTRATANTE (internet, dispositivos).</p>
+  
+  <p style="margin-top: 40px; text-align: center;">__________________________________________________<br/>Assinatura do CONTRATANTE</p>
+</div>
+`;
+
+    mCreateContrato.mutate({ data: { workshop_id: selectedWorkshopParaContrato, conteudo_html: htmlPadrao } });
+    setNovoContratoModal(false);
+  };
+
+  const handlePrintContrato = () => {
+    if (!contratoVisualizar) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return toast.error("Pop-up bloqueado");
+    
+    let imgAssinatura = '';
+    if (contratoVisualizar.assinatura_imagem) {
+      imgAssinatura = `<div style="margin-top: 50px; text-align: center;">
+        <img src="${contratoVisualizar.assinatura_imagem}" style="max-height: 100px; border-bottom: 1px solid #000; padding-bottom: 5px;" />
+        <p style="margin-top: 5px; font-weight: bold;">Assinado digitalmente em: ${new Date(contratoVisualizar.data_assinatura).toLocaleString()}</p>
+      </div>`;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Contrato - ${contratoVisualizar.workshops?.name}</title>
+          <style>body { font-family: Arial, sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; }</style>
+        </head>
+        <body onload="window.print(); window.close();">
+          ${contratoVisualizar.conteudo_html}
+          ${imgAssinatura}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleSendWhatsapp = (c: any) => {
+    const text = `Olá! O seu contrato de licenciamento do sistema AutoPulse OS encontra-se no status: *${c.status.toUpperCase()}*.\n\nPara visualizar as cláusulas e manter seus dados atualizados, por favor acesse a plataforma ou solicite a via em PDF.\n\nAtenciosamente,\nEquipe AutoPulse OS`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+  };
 
   // Open plan edit dialog
   const handleOpenEdit = (w: WorkshopAdmin) => {
@@ -238,6 +348,7 @@ function Page() {
           { key: "clientes" as const, label: "Clientes & Planos", icon: Users },
           { key: "gateway" as const, label: "Gateway de Pagamento", icon: Wallet },
           { key: "suporte" as const, label: "Dar Suporte (VNC)", icon: MonitorPlay },
+          { key: "contratos" as const, label: "Contratos de Locação", icon: FileSignature },
         ].map(t => (
           <button
             key={t.key}
@@ -293,6 +404,9 @@ function Page() {
           </TabsTrigger>
           <TabsTrigger value="suporte" className="gap-2 rounded-lg text-xs md:text-sm">
             <MonitorPlay className="h-4 w-4" /> Acesso Remoto
+          </TabsTrigger>
+          <TabsTrigger value="contratos" className="gap-2 rounded-lg text-xs md:text-sm">
+            <FileSignature className="h-4 w-4" /> Contratos
           </TabsTrigger>
         </TabsList>
 
@@ -525,6 +639,75 @@ function Page() {
         )}
         </TabsContent>
 
+        <TabsContent value="contratos" className="mt-0">
+          <div className="glass rounded-2xl border border-border/40 space-y-4">
+            <div className="p-4 sm:p-6 border-b border-border/40 flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-medium flex items-center gap-2">
+                  <FileSignature className="h-5 w-5 text-primary" />
+                  Contratos de Locação
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">Gerencie os contratos de licenciamento SaaS gerados para as oficinas</p>
+              </div>
+              <Button onClick={() => setNovoContratoModal(true)} className="gap-2">
+                <Plus className="h-4 w-4" /> Novo Contrato
+              </Button>
+            </div>
+            
+            <div className="p-0 sm:p-6 overflow-x-auto">
+              <table className="w-full whitespace-nowrap text-left text-sm">
+                <thead className="bg-secondary/40 text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Oficina / Cliente</th>
+                    <th className="px-4 py-3 font-medium">CNPJ</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Gerado em</th>
+                    <th className="px-4 py-3 font-medium text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {contratos.map((c: any) => (
+                    <tr key={c.id} className="hover:bg-secondary/20 transition-colors">
+                      <td className="px-4 py-4 font-medium">{c.workshops?.name || 'Desconhecida'}</td>
+                      <td className="px-4 py-4 text-muted-foreground">{c.workshops?.cnpj || '-'}</td>
+                      <td className="px-4 py-4">
+                        {c.status === "gerado" && <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-1 rounded text-xs">Pendente Assinatura</span>}
+                        {c.status === "assinado" && <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-1 rounded text-xs">Assinado</span>}
+                        {c.status === "cancelado" && <span className="bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-1 rounded text-xs">Cancelado</span>}
+                      </td>
+                      <td className="px-4 py-4 text-muted-foreground">{new Date(c.data_geracao).toLocaleDateString()}</td>
+                      <td className="px-4 py-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          {c.status === 'gerado' && (
+                            <Button size="sm" variant="outline" onClick={() => { setContratoVisualizar(c); setHtmlEdit(c.conteudo_html); setShowSignaturePad(false); }} className="gap-2 h-8 text-xs">
+                              <FileSignature className="h-3 w-3" /> Assinar
+                            </Button>
+                          )}
+                          {c.status === 'assinado' && (
+                            <Button size="sm" variant="outline" onClick={() => { setContratoVisualizar(c); setShowSignaturePad(false); }} className="gap-2 h-8 text-xs">
+                              <FileCheck className="h-3 w-3" /> Ver Assinado
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-500/10" onClick={() => {
+                            if (window.confirm("Deseja excluir este contrato?")) mDeleteContrato.mutate(c.id);
+                          }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {contratos.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-muted-foreground">Nenhum contrato gerado.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </TabsContent>
+
         <TabsContent value="gateway" className="mt-0">
           <div className="glass rounded-2xl p-6 border border-border/40 space-y-6 max-w-3xl">
             <div>
@@ -678,6 +861,111 @@ function Page() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* NOVO CONTRATO DIALOG */}
+      <Dialog open={novoContratoModal} onOpenChange={setNovoContratoModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Gerar Novo Contrato</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Selecione a Oficina (Cliente)</Label>
+              <select 
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={selectedWorkshopParaContrato}
+                onChange={e => setSelectedWorkshopParaContrato(e.target.value)}
+              >
+                <option value="">-- Selecione --</option>
+                {workshops.map(w => (
+                  <option key={w.id} value={w.id}>{w.name} ({w.plan})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNovoContratoModal(false)}>Cancelar</Button>
+            <Button onClick={handleGerarContrato} disabled={!selectedWorkshopParaContrato || mCreateContrato.isPending}>Gerar Minuta Padrão</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* VISUALIZADOR DE CONTRATO DIALOG */}
+      <Dialog open={!!contratoVisualizar} onOpenChange={(open) => !open && setContratoVisualizar(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="flex flex-row items-center justify-between border-b border-border/40 pb-4">
+            <DialogTitle>
+              Contrato de {contratoVisualizar?.workshops?.name}
+              {contratoVisualizar?.status === 'assinado' && <span className="ml-3 text-xs bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded align-middle">Assinado</span>}
+            </DialogTitle>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="gap-2" onClick={handlePrintContrato}>
+                <Printer className="h-4 w-4" /> Imprimir / PDF
+              </Button>
+              <Button size="sm" variant="outline" className="gap-2 text-green-500 border-green-500/20 hover:bg-green-500/10" onClick={() => handleSendWhatsapp(contratoVisualizar)}>
+                <MessageCircle className="h-4 w-4" /> Enviar WhatsApp
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="py-4 space-y-6">
+            {/* Se estiver gerado, permite editar o HTML. Se estiver assinado, apenas exibe */}
+            {contratoVisualizar?.status === 'gerado' ? (
+              <div className="space-y-2">
+                <Label>Conteúdo do Contrato (HTML)</Label>
+                <textarea 
+                  className="w-full h-[300px] p-4 text-sm font-mono border rounded-md bg-secondary/20"
+                  value={htmlEdit}
+                  onChange={e => setHtmlEdit(e.target.value)}
+                />
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  disabled={mUpdateContrato.isPending || htmlEdit === contratoVisualizar?.conteudo_html}
+                  onClick={() => mUpdateContrato.mutate({ data: { id: contratoVisualizar.id, conteudo_html: htmlEdit } })}
+                >
+                  <Save className="h-4 w-4 mr-2" /> Salvar Edições
+                </Button>
+              </div>
+            ) : (
+              <div 
+                className="bg-white text-black p-8 rounded-md border min-h-[400px]"
+                dangerouslySetInnerHTML={{ __html: contratoVisualizar?.conteudo_html || '' }}
+              />
+            )}
+
+            {contratoVisualizar?.status === 'gerado' && !showSignaturePad && (
+              <div className="flex justify-center pt-4 border-t">
+                <Button size="lg" className="w-full max-w-sm gap-2" onClick={() => setShowSignaturePad(true)}>
+                  <FileSignature className="h-5 w-5" /> Assinar Digitalmente
+                </Button>
+              </div>
+            )}
+
+            {showSignaturePad && (
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="font-medium text-center">Assinatura Digital</h3>
+                <div className="max-w-md mx-auto">
+                  <SignaturePad 
+                    onCancel={() => setShowSignaturePad(false)} 
+                    onSign={(base64) => {
+                      mAssinarContrato.mutate({ data: { id: contratoVisualizar.id, assinatura_imagem: base64 } });
+                    }} 
+                  />
+                </div>
+              </div>
+            )}
+
+            {contratoVisualizar?.status === 'assinado' && contratoVisualizar?.assinatura_imagem && (
+              <div className="pt-6 border-t text-center space-y-2">
+                <h3 className="font-medium text-muted-foreground">Assinado Eletronicamente em {new Date(contratoVisualizar.data_assinatura).toLocaleString()}</h3>
+                <div className="bg-white inline-block p-4 rounded border">
+                  <img src={contratoVisualizar.assinatura_imagem} alt="Assinatura" className="max-h-[120px]" />
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

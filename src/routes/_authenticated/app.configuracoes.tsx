@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { TefConfigTab } from "@/components/app/TefConfigTab";
-import { CreditCard } from "lucide-react";
+import { CreditCard, Printer } from "lucide-react";
+import { PrintLayoutEditor } from "@/components/app/PrintLayoutEditor";
 
 export const Route = createFileRoute("/_authenticated/app/configuracoes")({ component: Page });
 
@@ -213,6 +214,9 @@ function Page() {
           <TabsTrigger value="tef" className="gap-2 rounded-lg text-xs md:text-sm">
             <CreditCard className="h-4 w-4" /> Integração TEF
           </TabsTrigger>
+          <TabsTrigger value="impressao" className="gap-2 rounded-lg text-xs md:text-sm">
+            <Printer className="h-4 w-4" /> Cupons e Impressão
+          </TabsTrigger>
           <TabsTrigger value="backups" className="gap-2 rounded-lg text-xs md:text-sm">
             <Cloud className="h-4 w-4" /> Backup & Restauração
           </TabsTrigger>
@@ -322,6 +326,10 @@ function Page() {
 
         <TabsContent value="tef" className="mt-0">
           <TefConfigTab />
+        </TabsContent>
+
+        <TabsContent value="impressao" className="mt-0">
+          <PrintLayoutEditor />
         </TabsContent>
 
         <TabsContent value="backups" className="mt-0 space-y-6">

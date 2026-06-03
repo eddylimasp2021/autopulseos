@@ -208,3 +208,85 @@ export const updateSaasConfigAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: z.infer<typeof UpdateSaasConfigInput>) => UpdateSaasConfigInput.parse(d))
   .handler(updateSaasConfigAdminHandler);
  
+// --- CONTRATOS SAAS ---
+
+export const listContratosAdmin = createServerFn({ method: "GET" }).handler(async ({ context }) => {
+  await checkSuperAdmin(context);
+  
+  const { data, error } = await supabaseAdmin
+    .from("saas_contratos")
+    .select("*, workshops(name, cnpj)")
+    .order("created_at", { ascending: false });
+    
+  if (error) throw new Error(error.message);
+  return data ?? [];
+});
+
+const CreateContratoInput = z.object({
+  workshop_id: z.string().uuid(),
+  conteudo_html: z.string().min(1)
+});
+
+export const createContratoAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: any) => CreateContratoInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await checkSuperAdmin(context);
+    
+    const { data: result, error } = await supabaseAdmin.from("saas_contratos").insert({
+      workshop_id: data.workshop_id,
+      status: "gerado",
+      conteudo_html: data.conteudo_html,
+      data_geracao: new Date().toISOString()
+    }).select().single();
+    
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+const UpdateContratoInput = z.object({
+  id: z.string().uuid(),
+  conteudo_html: z.string().min(1)
+});
+
+export const updateContratoAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: any) => UpdateContratoInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await checkSuperAdmin(context);
+    
+    const { data: result, error } = await supabaseAdmin.from("saas_contratos").update({
+      conteudo_html: data.conteudo_html
+    }).eq("id", data.id).select().single();
+    
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+const AssinarContratoInput = z.object({
+  id: z.string().uuid(),
+  assinatura_imagem: z.string().min(1)
+});
+
+export const assinarContratoAdmin = createServerFn({ method: "POST" })
+  .inputValidator((d: any) => AssinarContratoInput.parse(d))
+  .handler(async ({ data, context }) => {
+    await checkSuperAdmin(context);
+    
+    const { data: result, error } = await supabaseAdmin.from("saas_contratos").update({
+      status: "assinado",
+      assinatura_imagem: data.assinatura_imagem,
+      data_assinatura: new Date().toISOString()
+    }).eq("id", data.id).select().single();
+    
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const deleteContratoAdmin = createServerFn({ method: "POST" })
+  .validator((id: string) => id)
+  .handler(async ({ data: id, context }) => {
+    await checkSuperAdmin(context);
+    
+    const { error } = await supabaseAdmin.from("saas_contratos").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    return { success: true };
+  });

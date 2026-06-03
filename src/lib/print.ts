@@ -1,3 +1,7 @@
+import { supabase } from "@/integrations/supabase/client";
+import { generateReceiptHtml, PrintWorkshopData } from "./printTemplates";
+import type { PrintLayout } from "./printLayouts.functions";
+
 export interface CupomData {
   itens: { nome: string; qtd: number; preco: number }[];
   subtotal: number;
@@ -15,152 +19,128 @@ function openPrintWindow(htmlContent: string) {
   const w = window.open("", "_blank", "width=400,height=600");
   if (!w) return;
   w.document.open();
-  w.document.write(htmlContent);
+  
+  // Inject the auto-print script
+  const script = `
+    <script>
+      window.onload = function() {
+        setTimeout(() => {
+          window.print();
+          window.close();
+        }, 300);
+      };
+    </script>
+  `;
+  w.document.write(htmlContent.replace('</body>', script + '</body>'));
   w.document.close();
 }
 
-export function imprimirCupomNaoFiscal(data: CupomData) {
+async function getWorkshopPrintData(): Promise<PrintWorkshopData | null> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) return null;
+
+  const { data: member } = await supabase
+    .from('workshop_members')
+    .select('workshops(id, nome, logo_url, endereco, telefone)')
+    .eq('user_id', session.session.user.id)
+    .single();
+
+  if (!member || !member.workshops) return null;
+  const w = Array.isArray(member.workshops) ? member.workshops[0] : member.workshops;
+  
+  return {
+    workshopName: w.nome,
+    workshopLogo: w.logo_url || undefined,
+    endereco: w.endereco || undefined,
+    telefone: w.telefone || undefined,
+  };
+}
+
+async function getPrintLayoutPadrao(tipo_cupom: string): Promise<PrintLayout | null> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) return null;
+
+  const { data: member } = await supabase
+    .from('workshop_members')
+    .select('workshop_id')
+    .eq('user_id', session.session.user.id)
+    .single();
+
+  if (!member) return null;
+
+  const { data } = await supabase
+    .from('print_layouts')
+    .select('*')
+    .eq('workshop_id', member.workshop_id)
+    .eq('tipo_cupom', tipo_cupom)
+    .eq('is_padrao', true)
+    .single();
+
+  return data as PrintLayout | null;
+}
+
+const defaultLayout: Partial<PrintLayout> = {
+  template_base: 'detalhado',
+  largura_papel: '80mm',
+  tamanho_fonte: 'normal',
+  espacamento: 'normal',
+  mostrar_logo: false,
+  mostrar_endereco: true,
+  mostrar_telefone: true,
+  mostrar_rodape: true,
+  mostrar_obs: true,
+};
+
+export async function imprimirCupomNaoFiscal(data: CupomData) {
+  // O ideal seria criar a janela síncrona antes do await para não bloquear popups
+  // mas como estamos refatorando sem mudar a interface das chamadas de todo o projeto
+  // vamos torcer para o popup não ser bloqueado ou abrir primeiro um blank.
+  const w = window.open("", "_blank", "width=400,height=600");
+  if (!w) {
+    alert("O popup de impressão foi bloqueado pelo navegador. Por favor, permita popups neste site.");
+    return;
+  }
+  
+  const workshopData = await getWorkshopPrintData() || { workshopName: "Garagem OS" };
+  let layout = await getPrintLayoutPadrao('venda');
+  
+  if (!layout) {
+    layout = { ...defaultLayout, tipo_cupom: 'venda' } as PrintLayout;
+  }
+
+  const html = generateReceiptHtml(layout, workshopData, data);
+  
+  w.document.open();
+  
+  const script = `<script>window.onload = function() { setTimeout(() => { window.print(); window.close(); }, 300); };</script>`;
+  w.document.write(html.replace('</body>', script + '</body>'));
+  w.document.close();
+}
+
+// TODO: Refactor imprimirAberturaCaixa and imprimirFechamentoCaixa to use the same logic
+export async function imprimirAberturaCaixa(operador: string, saldoInicial: number) {
   const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
+  
+  const w = window.open("", "_blank", "width=400,height=600");
+  if (!w) return;
+
+  const workshopData = await getWorkshopPrintData() || { workshopName: "Garagem OS" };
+  let layout = await getPrintLayoutPadrao('abertura_caixa');
+  
+  if (!layout) {
+    layout = { ...defaultLayout, tipo_cupom: 'abertura_caixa' } as PrintLayout;
+  }
+
+  // Fallback to static for now or we can implement the HTML inside generateReceiptHtml
+  const width = layout.largura_papel === '80mm' ? '80mm' : '58mm';
   
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
-      <title>Cupom Não Fiscal</title>
       <style>
-        body {
-          font-family: monospace;
-          width: 80mm;
-          margin: 0 auto;
-          padding: 10px;
-          color: #000;
-          font-size: 12px;
-        }
-        h2 { text-align: center; font-size: 16px; margin: 0 0 10px; }
-        .center { text-align: center; }
-        .dashed-line { border-bottom: 1px dashed #000; margin: 10px 0; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 2px 0; }
-        th { border-bottom: 1px dashed #000; }
-        .right { text-align: right; }
-        .bold { font-weight: bold; }
-        .total-row td { padding-top: 5px; }
-        .footer { text-align: center; margin-top: 20px; font-size: 11px; }
-        @media print {
-          @page { margin: 0; }
-          body { margin: 0; padding: 5px; width: 100%; }
-        }
-      </style>
-    </head>
-    <body>
-      <h2>CUPOM NÃO FISCAL</h2>
-      <div class="center">Data: ${data.data}</div>
-      <div class="dashed-line"></div>
-      
-      <table>
-        <thead>
-          <tr>
-            <th style="text-align: left; padding-bottom: 4px;">Descrição / Qtd x Unit.</th>
-            <th class="right" style="padding-bottom: 4px;">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.itens.map(item => `
-            <tr>
-              <td colspan="2" style="font-weight: bold; padding-top: 5px;">
-                ${item.nome}
-              </td>
-            </tr>
-            <tr style="border-bottom: 1px dashed #ccc;">
-              <td style="color: #444; padding-bottom: 5px; font-size: 11px;">
-                ${Number(item.qtd)}x ${brl(item.preco)}
-              </td>
-              <td class="right" style="padding-bottom: 5px; font-size: 11px;">
-                ${brl(item.preco * item.qtd)}
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-
-      <div class="dashed-line"></div>
-      
-      <table>
-        <tr>
-          <td>Subtotal:</td>
-          <td class="right">${brl(data.subtotal)}</td>
-        </tr>
-        ${data.desconto > 0 ? `
-        <tr>
-          <td>Desconto:</td>
-          <td class="right">- ${brl(data.desconto)}</td>
-        </tr>
-        ` : ''}
-        <tr class="total-row bold" style="font-size: 14px;">
-          <td>TOTAL:</td>
-          <td class="right">${brl(data.total)}</td>
-        </tr>
-      </table>
-
-      <div class="dashed-line"></div>
-      
-      <table>
-        <tr>
-          <td colspan="2" class="bold" style="padding-bottom: 5px;">PAGAMENTOS:</td>
-        </tr>
-        ${data.pagamentos.map(p => `
-        <tr>
-          <td>- ${p.forma.toUpperCase()}</td>
-          <td class="right">${brl(p.valor)}</td>
-        </tr>
-        `).join('')}
-        ${data.recebido ? `
-        <tr>
-          <td>Recebido:</td>
-          <td class="right">${brl(data.recebido)}</td>
-        </tr>
-        <tr>
-          <td>Troco:</td>
-          <td class="right">${brl(data.troco || 0)}</td>
-        </tr>
-        ` : ''}
-      </table>
-
-      ${data.observacao ? `
-      <div class="dashed-line"></div>
-      <div><strong>Obs:</strong> ${data.observacao}</div>
-      ` : ''}
-
-      <div class="footer">
-        OBRIGADO PELA PREFERÊNCIA!<br>
-        Sistema Garagem OS
-      </div>
-
-      <script>
-        window.onload = function() {
-          setTimeout(() => {
-            window.print();
-            window.close();
-          }, 300);
-        };
-      </script>
-    </body>
-    </html>
-  `;
-
-  openPrintWindow(html);
-}
-
-export function imprimirAberturaCaixa(operador: string, saldoInicial: number) {
-  const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 10px; font-size: 12px; }
+        body { font-family: monospace; width: ${width}; margin: 0 auto; padding: 10px; font-size: 12px; }
         h2 { text-align: center; font-size: 16px; margin: 0 0 10px; }
         .center { text-align: center; }
         .dashed-line { border-bottom: 1px dashed #000; margin: 10px 0; }
@@ -168,6 +148,10 @@ export function imprimirAberturaCaixa(operador: string, saldoInicial: number) {
       </style>
     </head>
     <body>
+      ${layout.mostrar_logo && workshopData.workshopLogo && layout.template_base === 'logo_grande' ? `<img src="${workshopData.workshopLogo}" style="max-width:80%;max-height:80px;margin:0 auto 10px;display:block;filter:grayscale(100%);" />` : ''}
+      <div class="center bold">${workshopData.workshopName}</div>
+      ${layout.mostrar_endereco && workshopData.endereco ? `<div class="center">${workshopData.endereco}</div>` : ''}
+      <div class="dashed-line"></div>
       <h2>ABERTURA DE CAIXA</h2>
       <div class="center">Data: ${new Date().toLocaleString('pt-BR')}</div>
       <div class="dashed-line"></div>
@@ -184,18 +168,30 @@ export function imprimirAberturaCaixa(operador: string, saldoInicial: number) {
     </body>
     </html>
   `;
-  openPrintWindow(html);
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
-export function imprimirFechamentoCaixa(dados: { operador: string; dataAbertura: string; saldoInicial: number; dinheiro: number; pix: number; credito: number; debito: number; totalVendas: number; saldoFinal: number; }) {
+export async function imprimirFechamentoCaixa(dados: { operador: string; dataAbertura: string; saldoInicial: number; dinheiro: number; pix: number; credito: number; debito: number; totalVendas: number; saldoFinal: number; }) {
   const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
+  
+  const w = window.open("", "_blank", "width=400,height=600");
+  if (!w) return;
+
+  const workshopData = await getWorkshopPrintData() || { workshopName: "Garagem OS" };
+  let layout = await getPrintLayoutPadrao('fechamento_caixa');
+  if (!layout) layout = { ...defaultLayout, tipo_cupom: 'fechamento_caixa' } as PrintLayout;
+
+  const width = layout.largura_papel === '80mm' ? '80mm' : '58mm';
+  
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
       <style>
-        body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 10px; font-size: 12px; }
+        body { font-family: monospace; width: ${width}; margin: 0 auto; padding: 10px; font-size: 12px; }
         h2 { text-align: center; font-size: 16px; margin: 0 0 10px; }
         .center { text-align: center; }
         .dashed-line { border-bottom: 1px dashed #000; margin: 10px 0; }
@@ -207,6 +203,9 @@ export function imprimirFechamentoCaixa(dados: { operador: string; dataAbertura:
       </style>
     </head>
     <body>
+      ${layout.mostrar_logo && workshopData.workshopLogo && layout.template_base === 'logo_grande' ? `<img src="${workshopData.workshopLogo}" style="max-width:80%;max-height:80px;margin:0 auto 10px;display:block;filter:grayscale(100%);" />` : ''}
+      <div class="center bold">${workshopData.workshopName}</div>
+      <div class="dashed-line"></div>
       <h2>FECHAMENTO DE CAIXA</h2>
       <div class="center">Fechado em: ${new Date().toLocaleString('pt-BR')}</div>
       <div class="dashed-line"></div>
@@ -240,5 +239,7 @@ export function imprimirFechamentoCaixa(dados: { operador: string; dataAbertura:
     </body>
     </html>
   `;
-  openPrintWindow(html);
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
