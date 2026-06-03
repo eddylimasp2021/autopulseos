@@ -25,6 +25,47 @@ type Produto = { id: string; nome: string; categoria: string | null; preco_venda
 type FormaPagamento = "pix" | "dinheiro" | "cartao_credito" | "cartao_debito";
 const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 
+const QtdControl = ({ item, updateQtd, setQtd }: { item: CartItem, updateQtd: (id: string, delta: number) => void, setQtd: (id: string, value: number) => void }) => {
+  const [val, setVal] = useState(item.qtd.toString());
+
+  useEffect(() => {
+    setVal(item.qtd.toString());
+  }, [item.qtd]);
+
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => updateQtd(item.id, -1)} className="grid h-7 w-7 place-items-center rounded-md bg-secondary hover:bg-primary/20 transition"><Minus className="h-3 w-3" /></button>
+      <Input 
+        type="text" 
+        inputMode="decimal"
+        className="w-16 h-7 text-center text-sm font-medium tabular-nums p-0 bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-primary/50" 
+        value={val}
+        onChange={(e) => {
+          let str = e.target.value.replace(/[^0-9.,]/g, '');
+          setVal(str);
+          let parsed = parseFloat(str.replace(',', '.'));
+          if (!isNaN(parsed)) {
+            setQtd(item.id, parsed);
+          }
+        }} 
+        onBlur={() => { 
+          let parsed = parseFloat(val.replace(',', '.'));
+          if (isNaN(parsed) || parsed === 0) {
+            setVal("1");
+            setQtd(item.id, 1);
+          } else {
+            setVal(parsed.toString());
+            setQtd(item.id, parsed);
+          }
+        }}
+        onFocus={(e) => e.target.select()}
+        onClick={(e) => (e.target as HTMLInputElement).select()}
+      />
+      <button onClick={() => updateQtd(item.id, 1)} className="grid h-7 w-7 place-items-center rounded-md bg-secondary hover:bg-primary/20 transition"><Plus className="h-3 w-3" /></button>
+    </div>
+  );
+};
+
 function Page() {
   const [busca, setBusca] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -875,18 +916,7 @@ function Page() {
                         {brl(item.preco)} × {item.qtd} = <span className="text-foreground font-medium">{brl(item.preco * item.qtd)}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => updateQtd(item.id, -1)} className="grid h-7 w-7 place-items-center rounded-md bg-secondary hover:bg-primary/20 transition"><Minus className="h-3 w-3" /></button>
-                      <Input 
-                        type="number" 
-                        step="0.001" 
-                        className="w-16 h-7 text-center text-sm font-medium tabular-nums p-0 bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-primary/50" 
-                        value={item.qtd} 
-                        onChange={(e) => setQtd(item.id, parseFloat(e.target.value))} 
-                        onBlur={(e) => { if (!e.target.value || parseFloat(e.target.value) === 0) setQtd(item.id, 1); }}
-                      />
-                      <button onClick={() => updateQtd(item.id, 1)} className="grid h-7 w-7 place-items-center rounded-md bg-secondary hover:bg-primary/20 transition"><Plus className="h-3 w-3" /></button>
-                    </div>
+                    <QtdControl item={item} updateQtd={updateQtd} setQtd={setQtd} />
                     <button onClick={() => removeItem(item.id)} className="grid h-7 w-7 place-items-center rounded-md hover:bg-destructive/20 transition"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
                   </div>
                 ))}
