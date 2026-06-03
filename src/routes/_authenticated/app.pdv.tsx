@@ -14,6 +14,8 @@ import { imprimirCupomNaoFiscal, imprimirAberturaCaixa, imprimirFechamentoCaixa 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ContadorMoedas } from "@/components/app/ContadorMoedas";
+import { getTefConfig } from "@/lib/tef.functions";
+import { TefDialog } from "@/components/app/TefDialog";
 
 export const Route = createFileRoute("/_authenticated/app/pdv")({ component: Page });
 
@@ -60,6 +62,7 @@ function Page() {
   const mAbrirCaixa = useServerFn(abrirCaixa);
   const mFecharCaixa = useServerFn(fecharCaixa);
   const getResumoFn = useServerFn(getResumoCaixa);
+  const fnGetTef = useServerFn(getTefConfig);
 
   const { data: produtos = [] } = useQuery({ queryKey: ["pdv-estoque"], queryFn: () => listEst() });
   const { data: clientes = [] } = useQuery({ queryKey: ["clientes"], queryFn: () => listCli() });
@@ -75,6 +78,16 @@ function Page() {
     queryFn: () => getResumoFn({ data: { caixa_id: caixaAtual?.id! } }),
     enabled: !!caixaAtual?.id && modalFechamento
   });
+
+  const { data: tefConfig } = useQuery({
+    queryKey: ["pdv-tef-config"],
+    queryFn: () => fnGetTef(),
+  });
+
+  const [tefDialogOpen, setTefDialogOpen] = useState(false);
+  const [tefValor, setTefValor] = useState(0);
+  const [tefTipo, setTefTipo] = useState("");
+  const [tefPagamentoAdicionado, setTefPagamentoAdicionado] = useState<{ id: string, forma: FormaPagamento, valor: number } | null>(null);
 
   useEffect(() => {
     if (!modalFechamento) {
@@ -254,7 +267,7 @@ function Page() {
       },
     }),
     onSuccess: (r: any) => {
-      const trocoMsg = r.troco > 0 ? ` • Troco ${brl(Number(r.troco))}` : "";
+      const trocoMsg = r.troco > 0 ? ` — Troco ${brl(Number(r.troco))}` : "";
       toast.success(`Venda finalizada — ${brl(Number(r.total))}${trocoMsg}`);
       
       imprimirCupomNaoFiscal({
@@ -736,8 +749,16 @@ function Page() {
                     onClick={() => {
                       const val = Number(valorMultiploStr.replace(",", ".")) || faltaPagarMultiplo;
                       if (val <= 0) return;
-                      setPagamentosAdicionados([...pagamentosAdicionados, { id: crypto.randomUUID(), forma: formaPagamentoMultiplo, valor: val }]);
-                      setValorMultiploStr("");
+                      
+                      if (tefConfig?.ativo && ["pix", "cartao_credito", "cartao_debito"].includes(formaPagamentoMultiplo)) {
+                        setTefValor(val);
+                        setTefTipo(formaPagamentoMultiplo);
+                        setTefPagamentoAdicionado({ id: crypto.randomUUID(), forma: formaPagamentoMultiplo, valor: val });
+                        setTefDialogOpen(true);
+                      } else {
+                        setPagamentosAdicionados([...pagamentosAdicionados, { id: crypto.randomUUID(), forma: formaPagamentoMultiplo, valor: val }]);
+                        setValorMultiploStr("");
+                      }
                     }}
                     disabled={faltaPagarMultiplo <= 0}
                     className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition"
@@ -790,7 +811,20 @@ function Page() {
             )}
           </div>
 
-          <button onClick={() => mFinalizar.mutate()} disabled={!podeFinalizar} className="w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_24px_-4px_oklch(0.65_0.18_240/0.5)] flex items-center justify-center gap-2">
+          <button 
+            onClick={() => {
+              if (!isPagamentoMultiplo && tefConfig?.ativo && ["pix", "cartao_credito", "cartao_debito"].includes(formaPagamento)) {
+                setTefValor(total);
+                setTefTipo(formaPagamento);
+                setTefPagamentoAdicionado(null);
+                setTefDialogOpen(true);
+              } else {
+                mFinalizar.mutate();
+              }
+            }} 
+            disabled={!podeFinalizar} 
+            className="w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_24px_-4px_oklch(0.65_0.18_240/0.5)] flex items-center justify-center gap-2"
+          >
             <Receipt className="h-4 w-4" />
             {mFinalizar.isPending ? "Processando…" : cart.length === 0 ? "Adicione produtos" : `Finalizar Venda (F9) — ${brl(total)}`}
           </button>
@@ -807,6 +841,27 @@ function Page() {
           </div>
         </motion.div>
       </div>
+
+      {tefConfig && tefDialogOpen && (
+        <TefDialog
+          open={tefDialogOpen}
+          onOpenChange={setTefDialogOpen}
+          config={tefConfig}
+          valor={tefValor}
+          tipoPagamento={tefTipo}
+          onSuccess={(nsu, receipts) => {
+            if (tefPagamentoAdicionado) {
+              setPagamentosAdicionados([...pagamentosAdicionados, tefPagamentoAdicionado]);
+              setValorMultiploStr("");
+            } else {
+              mFinalizar.mutate();
+            }
+          }}
+          onCancel={() => {
+            setTefPagamentoAdicionado(null);
+          }}
+        />
+      )}
     </div>
   );
 }

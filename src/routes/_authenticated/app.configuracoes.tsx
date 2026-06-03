@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { TefConfigTab } from "@/components/app/TefConfigTab";
+import { CreditCard } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app/configuracoes")({ component: Page });
 
@@ -208,6 +210,9 @@ function Page() {
           <TabsTrigger value="suporte" className="gap-2 rounded-lg text-xs md:text-sm">
             <LifeBuoy className="h-4 w-4" /> Receber Suporte
           </TabsTrigger>
+          <TabsTrigger value="tef" className="gap-2 rounded-lg text-xs md:text-sm">
+            <CreditCard className="h-4 w-4" /> Integração TEF
+          </TabsTrigger>
           <TabsTrigger value="backups" className="gap-2 rounded-lg text-xs md:text-sm">
             <Cloud className="h-4 w-4" /> Backup & Restauração
           </TabsTrigger>
@@ -313,6 +318,10 @@ function Page() {
               </Link>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="tef" className="mt-0">
+          <TefConfigTab />
         </TabsContent>
 
         <TabsContent value="backups" className="mt-0 space-y-6">
