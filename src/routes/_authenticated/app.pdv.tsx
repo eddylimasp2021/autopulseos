@@ -231,12 +231,27 @@ function Page() {
   const updateQtd = (id: string, delta: number) =>
     setCart(prev => prev.map(x => {
       if (x.id !== id) return x;
-      // Allow negative quantities natively now
       const next = x.qtd + delta;
-      if (!modoDevolucao && next > x.estoque) { toast.error(`Estoque máximo de ${x.estoque}`); return x; }
+      if (!modoDevolucao && next > x.estoque) {
+        toast.warning("Estoque insuficiente", { description: `Restam apenas ${x.estoque} unidades.` });
+        return x;
+      }
       if (next === 0) return { ...x, qtd: delta > 0 ? 1 : -1 }; // Skip 0
       return { ...x, qtd: next };
     }));
+
+  const setQtd = (id: string, value: number) => {
+    if (isNaN(value)) return;
+    setCart(prev => prev.map(x => {
+      if (x.id !== id) return x;
+      if (value === 0) return x; // Skip 0
+      if (!modoDevolucao && value > x.estoque) {
+        toast.warning("Estoque insuficiente", { description: `Restam apenas ${x.estoque} unidades.` });
+        return { ...x, qtd: x.estoque };
+      }
+      return { ...x, qtd: value };
+    }));
+  };
   const removeItem = (id: string) => setCart(prev => prev.filter(x => x.id !== id));
   const limparCarrinho = () => { 
     setCart([]); setDescontoStr(""); setRecebidoStr(""); setObservacao(""); 
@@ -862,7 +877,14 @@ function Page() {
                     </div>
                     <div className="flex items-center gap-1">
                       <button onClick={() => updateQtd(item.id, -1)} className="grid h-7 w-7 place-items-center rounded-md bg-secondary hover:bg-primary/20 transition"><Minus className="h-3 w-3" /></button>
-                      <span className="w-6 text-center text-sm font-medium tabular-nums">{item.qtd}</span>
+                      <Input 
+                        type="number" 
+                        step="0.001" 
+                        className="w-16 h-7 text-center text-sm font-medium tabular-nums p-0 bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-primary/50" 
+                        value={item.qtd} 
+                        onChange={(e) => setQtd(item.id, parseFloat(e.target.value))} 
+                        onBlur={(e) => { if (!e.target.value || parseFloat(e.target.value) === 0) setQtd(item.id, 1); }}
+                      />
                       <button onClick={() => updateQtd(item.id, 1)} className="grid h-7 w-7 place-items-center rounded-md bg-secondary hover:bg-primary/20 transition"><Plus className="h-3 w-3" /></button>
                     </div>
                     <button onClick={() => removeItem(item.id)} className="grid h-7 w-7 place-items-center rounded-md hover:bg-destructive/20 transition"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
