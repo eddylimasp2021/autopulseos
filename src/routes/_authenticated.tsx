@@ -74,7 +74,7 @@ function AuthLayout() {
   );
 }
 
-function AuthLayoutError({ reset }: { error: Error; reset: () => void }) {
+function AuthLayoutError({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
 
   return (

@@ -48,7 +48,7 @@ export const listPrintLayouts = createServerFn({ method: "GET" }).handler(async 
 });
 
 export const getPrintLayout = createServerFn({ method: "GET" })
-  .validator((id: string) => id)
+  .inputValidator((id: string) => id)
   .handler(async ({ data: id, context }) => {
     const { supabase } = context as any;
     const workshop_id = await getWorkshopId(supabase);
@@ -66,7 +66,7 @@ export const getPrintLayout = createServerFn({ method: "GET" })
 });
 
 export const createPrintLayout = createServerFn({ method: "POST" })
-  .validator((layout: Omit<PrintLayout, "id" | "workshop_id" | "created_at" | "updated_at">) => layout)
+  .inputValidator((layout: Omit<PrintLayout, "id" | "workshop_id" | "created_at" | "updated_at">) => layout)
   .handler(async ({ data: layout, context }) => {
     const { supabase } = context as any;
     const workshop_id = await getWorkshopId(supabase);
@@ -92,7 +92,7 @@ export const createPrintLayout = createServerFn({ method: "POST" })
 });
 
 export const updatePrintLayout = createServerFn({ method: "POST" })
-  .validator((payload: { id: string; updates: Partial<PrintLayout> }) => payload)
+  .inputValidator((payload: { id: string; updates: Partial<PrintLayout> }) => payload)
   .handler(async ({ data: { id, updates }, context }) => {
     const { supabase } = context as any;
     const workshop_id = await getWorkshopId(supabase);
@@ -129,7 +129,7 @@ export const updatePrintLayout = createServerFn({ method: "POST" })
 });
 
 export const deletePrintLayout = createServerFn({ method: "POST" })
-  .validator((id: string) => id)
+  .inputValidator((id: string) => id)
   .handler(async ({ data: id, context }) => {
     const { supabase } = context as any;
     const workshop_id = await getWorkshopId(supabase);
@@ -146,7 +146,7 @@ export const deletePrintLayout = createServerFn({ method: "POST" })
 });
 
 export const getPrintLayoutPadrao = createServerFn({ method: "GET" })
-  .validator((tipo_cupom: string) => tipo_cupom)
+  .inputValidator((tipo_cupom: string) => tipo_cupom)
   .handler(async ({ data: tipo_cupom, context }) => {
     const { supabase } = context as any;
     const workshop_id = await getWorkshopId(supabase);

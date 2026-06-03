@@ -81,7 +81,7 @@ function Page() {
 
   // Form
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FornecedorInput>({
-    resolver: zodResolver(FornecedorInputSchema),
+    resolver: zodResolver(FornecedorInputSchema) as any,
     defaultValues: { status: "ativo" }
   });
 

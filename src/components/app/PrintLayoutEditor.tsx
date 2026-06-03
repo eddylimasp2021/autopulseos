@@ -93,11 +93,14 @@ export function PrintLayoutEditor() {
 
   const previewHtml = useMemo(() => {
     if (!formData || !workshop) return "";
-    return generateReceiptHtml(formData, {
-      workshopName: workshop.nome,
-      workshopLogo: workshop.logo_url,
-      tipo_cupom: formData.tipo_cupom || "venda"
-    });
+    return generateReceiptHtml(
+      formData,
+      {
+        workshopName: workshop.nome,
+        workshopLogo: workshop.logo_url,
+      },
+      'mock'
+    );
   }, [formData, workshop]);
 
   if (isLoading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-6 w-6 mx-auto" /></div>;

@@ -54,11 +54,11 @@ export const Route = createFileRoute("/api/public/webhooks/payment")({
           // 4. Atualizar o plano da oficina para profissional (ativo)
           const { error: updateError } = await supabaseAdmin
             .from("workshops")
-            .update({ 
-              plan: "profissional", 
+            .update({
+              plan: "profissional",
               trial_ends_at: null,
               updated_at: new Date().toISOString()
-            })
+            } as any)
             .eq("id", workshopId);
 
           if (updateError) {
