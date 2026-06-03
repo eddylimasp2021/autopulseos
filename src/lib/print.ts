@@ -68,7 +68,7 @@ async function getPrintLayoutPadrao(tipo_cupom: string): Promise<PrintLayout | n
 
   if (!member) return null;
 
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from('print_layouts')
     .select('*')
     .eq('workshop_id', member.workshop_id)
