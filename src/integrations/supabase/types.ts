@@ -549,6 +549,30 @@ export type Database = {
         }
         Relationships: []
       }
+      saas_config: {
+        Row: {
+          asaas_api_key: string | null
+          asaas_webhook_secret: string | null
+          created_at: string
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          asaas_api_key?: string | null
+          asaas_webhook_secret?: string | null
+          created_at?: string
+          id: number
+          updated_at?: string
+        }
+        Update: {
+          asaas_api_key?: string | null
+          asaas_webhook_secret?: string | null
+          created_at?: string
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       saas_contratos: {
         Row: {
           assinatura_imagem: string | null
@@ -914,6 +938,7 @@ export type Database = {
           plan: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores: number
           slug: string
+          support_enabled: boolean
           trial_ends_at: string
           updated_at: string
         }
@@ -926,6 +951,7 @@ export type Database = {
           plan?: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores?: number
           slug: string
+          support_enabled?: boolean
           trial_ends_at?: string
           updated_at?: string
         }
@@ -938,6 +964,7 @@ export type Database = {
           plan?: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores?: number
           slug?: string
+          support_enabled?: boolean
           trial_ends_at?: string
           updated_at?: string
         }

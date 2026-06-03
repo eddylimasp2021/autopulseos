@@ -236,7 +236,6 @@ export const createContratoAdmin = createServerFn({ method: "POST" })
       workshop_id: data.workshop_id,
       status: "gerado",
       conteudo_html: data.conteudo_html,
-      data_geracao: new Date().toISOString()
     }).select().single();
     
     if (error) throw new Error(error.message);
@@ -282,7 +281,7 @@ export const assinarContratoAdmin = createServerFn({ method: "POST" })
   });
 
 export const deleteContratoAdmin = createServerFn({ method: "POST" })
-  .validator((id: string) => id)
+  .inputValidator((id: string) => id)
   .handler(async ({ data: id, context }) => {
     await checkSuperAdmin(context);
     
