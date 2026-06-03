@@ -394,7 +394,7 @@ function Page() {
       </div>
 
       {/* Main Panel Box */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="space-y-6">
         <TabsList className="bg-secondary/40 border border-border/40 p-1 rounded-xl w-full sm:w-auto overflow-x-auto justify-start">
           <TabsTrigger value="clientes" className="gap-2 rounded-lg text-xs md:text-sm">
             <Building className="h-4 w-4" /> Oficinas e Clientes
