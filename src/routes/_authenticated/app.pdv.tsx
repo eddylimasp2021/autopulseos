@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { listEstoqueParaPDV, finalizarVenda, verificarCaixaAberto, abrirCaixa, fecharCaixa, getResumoCaixa, registrarSangria, registrarReforco, listVendasCaixa, estornarVenda } from "@/lib/pdv.functions";
+import { listEstoqueParaPDV, finalizarVenda, verificarCaixaAberto, abrirCaixa, fecharCaixa, getResumoCaixa, registrarSangria, registrarReforco, listVendasCaixa, estornarVenda, listarVendasPdv } from "@/lib/pdv.functions";
 import { listClientes } from "@/lib/clientes.functions";
 import { listOrdens, getOrdem, updateOrdemStatus } from "@/lib/ordens.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -65,6 +65,7 @@ function Page() {
   const mSangria = useServerFn(registrarSangria);
   const mReforco = useServerFn(registrarReforco);
   const mListVendas = useServerFn(listVendasCaixa);
+  const mListRecibos = useServerFn(listarVendasPdv);
   const mEstornar = useServerFn(estornarVenda);
   const fnGetTef = useServerFn(getTefConfig);
 
@@ -97,6 +98,7 @@ function Page() {
   const [modalSangriaOpen, setModalSangriaOpen] = useState(false);
   const [modalReforcoOpen, setModalReforcoOpen] = useState(false);
   const [modalHistoricoOpen, setModalHistoricoOpen] = useState(false);
+  const [modalRecibosOpen, setModalRecibosOpen] = useState(false);
   const [sangriaValor, setSangriaValor] = useState("");
   const [sangriaObs, setSangriaObs] = useState("");
   const [reforcoValor, setReforcoValor] = useState("");
@@ -107,6 +109,12 @@ function Page() {
     queryKey: ["pdv-historico-vendas", caixaAtual?.id],
     queryFn: () => mListVendas({ data: caixaAtual?.id! }),
     enabled: !!caixaAtual?.id && modalHistoricoOpen
+  });
+
+  const { data: recibosHistory = [], isLoading: loadingRecibos } = useQuery({
+    queryKey: ["pdv-historico-recibos"],
+    queryFn: () => mListRecibos(),
+    enabled: modalRecibosOpen
   });
 
   useEffect(() => {
@@ -564,6 +572,62 @@ function Page() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={modalRecibosOpen} onOpenChange={setModalRecibosOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Cupons Emitidos (2ª Via)</DialogTitle></DialogHeader>
+          <div className="flex-1 overflow-y-auto mt-4">
+            {loadingRecibos ? (
+              <div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : recibosHistory.length === 0 ? (
+              <p className="text-center text-muted-foreground p-4">Nenhuma venda encontrada.</p>
+            ) : (
+              <table className="w-full text-sm text-left">
+                <thead className="bg-secondary/50 border-b border-border/50 sticky top-0">
+                  <tr className="text-xs uppercase text-muted-foreground">
+                    <th className="p-3">Data/Hora</th>
+                    <th className="p-3">Cliente</th>
+                    <th className="p-3">Total</th>
+                    <th className="p-3">Operador</th>
+                    <th className="p-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {recibosHistory.map((v: any) => (
+                    <tr key={v.id} className="hover:bg-secondary/30 transition-colors">
+                      <td className="p-3">{new Date(v.created_at).toLocaleString('pt-BR')}</td>
+                      <td className="p-3">{v.clientes?.nome || 'Avulso'}</td>
+                      <td className="p-3 tabular-nums font-medium">{Number(v.total).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</td>
+                      <td className="p-3">{v.operador_nome}</td>
+                      <td className="p-3 text-right">
+                        <Button 
+                          variant="outline" size="sm" className="h-8 gap-2"
+                          onClick={() => {
+                            imprimirCupomNaoFiscal({
+                              itens: v.itens,
+                              total: Number(v.total),
+                              subtotal: Number(v.subtotal),
+                              desconto: Number(v.desconto),
+                              valorRecebido: Number(v.total) + Number(v.troco),
+                              troco: Number(v.troco),
+                              pagamentos: v.pagamentos,
+                              clienteNome: v.clientes?.nome,
+                              clienteCpfCnpj: v.clientes?.cpf_cnpj,
+                              observacao: v.observacao || undefined
+                            });
+                          }}
+                        >
+                          <Receipt className="h-3.5 w-3.5" /> Reimprimir
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL HISTÓRICO */}
       <Dialog open={modalHistoricoOpen} onOpenChange={setModalHistoricoOpen}>
         <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
@@ -671,9 +735,17 @@ function Page() {
           <button 
             onClick={() => setModalHistoricoOpen(true)} 
             className="text-xs font-medium text-blue-500 hover:bg-blue-500/10 transition px-3 py-2 rounded-xl border border-blue-500/40 hover:border-blue-500/60 flex items-center gap-1.5"
-            title="Histórico e Estorno"
+            title="Histórico e Estorno do Caixa"
           >
-            <History className="h-3.5 w-3.5" /> Histórico
+            <History className="h-3.5 w-3.5" /> Histórico Caixa
+          </button>
+          
+          <button 
+            onClick={() => setModalRecibosOpen(true)} 
+            className="text-xs font-medium text-purple-500 hover:bg-purple-500/10 transition px-3 py-2 rounded-xl border border-purple-500/40 hover:border-purple-500/60 flex items-center gap-1.5"
+            title="Ver e reimprimir todos os cupons de venda"
+          >
+            <Receipt className="h-3.5 w-3.5" /> 2ª Via
           </button>
           
           <div className="w-px h-6 bg-border mx-1 hidden sm:block"></div>

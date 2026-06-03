@@ -63,6 +63,30 @@ export const finalizarVenda = createServerFn({ method: "POST" })
       throw new Error("Nenhum pagamento válido informado.");
     }
 
+    // Obter nome do operador
+    const { data: caixa, error: caixaErr } = await supabase.from("pdv_caixas").select("operador_nome").eq("id", data.caixa_id).single();
+    if (caixaErr) throw new Error("Caixa inválido: " + caixaErr.message);
+
+    const pagDinheiro = data.pagamentos.find(p => p.forma === "dinheiro");
+    const troco = !isDevolucao && pagDinheiro && data.valor_recebido != null
+      ? Math.max(0, Number(data.valor_recebido) - pagDinheiro.valor)
+      : 0;
+
+    // Salva o snapshot da venda
+    const { data: vendaSnapshot, error: vendaErr } = await supabase.from("pdv_vendas").insert({
+      caixa_id: data.caixa_id,
+      cliente_id: data.cliente_id ?? null,
+      operador_nome: caixa.operador_nome,
+      subtotal,
+      desconto,
+      total,
+      troco,
+      itens: data.itens,
+      pagamentos: data.pagamentos,
+      observacao: data.observacao
+    }).select().single();
+    if (vendaErr) throw new Error("Erro ao salvar histórico de venda PDV: " + vendaErr.message);
+
     const { data: lancs, error: e1 } = await supabase
       .from("financeiro_lancamentos")
       .insert(lancamentosAInserir)
@@ -82,13 +106,19 @@ export const finalizarVenda = createServerFn({ method: "POST" })
       }
     }
     
-    const pagDinheiro = data.pagamentos.find(p => p.forma === "dinheiro");
-    const troco = !isDevolucao && pagDinheiro && data.valor_recebido != null
-      ? Math.max(0, Number(data.valor_recebido) - pagDinheiro.valor)
-      : 0;
-      
-    return { ok: true, total, subtotal, desconto, troco, lancamentos_ids: lancs.map((l:any) => l.id) };
+    return { ok: true, total, subtotal, desconto, troco, lancamentos_ids: lancs.map((l:any) => l.id), venda: vendaSnapshot };
   });
+
+export const listarVendasPdv = createServerFn({ method: "GET" }).handler(async ({ context }) => {
+  const { supabase } = context as any;
+  const { data, error } = await supabase
+    .from("pdv_vendas")
+    .select("*, clientes(nome, cpf_cnpj)")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+});
 
 export const verificarCaixaAberto = createServerFn({ method: "GET" }).handler(async ({ context }) => {
   const { supabase } = context as any;
