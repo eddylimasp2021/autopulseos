@@ -59,6 +59,20 @@ create policy "Admins can delete saas_contratos"
     )
   );
 
--- Trigger for updated_at
-create trigger handle_updated_at before update on public.saas_contratos
-  for each row execute procedure moddatetime (updated_at);
+-- Criar a função de atualizar a data (sem depender da extensão externa)
+CREATE OR REPLACE FUNCTION public.set_updated_at_timestamp()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+-- Criar o gatilho (Trigger) para rodar a função
+DROP TRIGGER IF EXISTS handle_updated_at ON public.saas_contratos;
+CREATE TRIGGER handle_updated_at
+  BEFORE UPDATE ON public.saas_contratos
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_updated_at_timestamp();
