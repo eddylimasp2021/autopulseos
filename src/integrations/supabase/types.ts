@@ -279,80 +279,6 @@ export type Database = {
           },
         ]
       }
-      fornecedores: {
-        Row: {
-          id: string
-          workshop_id: string
-          nome_fantasia: string
-          razao_social: string | null
-          cnpj_cpf: string | null
-          inscricao_estadual: string | null
-          email: string | null
-          telefone: string | null
-          celular: string | null
-          cep: string | null
-          endereco: string | null
-          numero: string | null
-          bairro: string | null
-          cidade: string | null
-          estado: string | null
-          observacoes: string | null
-          status: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          workshop_id: string
-          nome_fantasia: string
-          razao_social?: string | null
-          cnpj_cpf?: string | null
-          inscricao_estadual?: string | null
-          email?: string | null
-          telefone?: string | null
-          celular?: string | null
-          cep?: string | null
-          endereco?: string | null
-          numero?: string | null
-          bairro?: string | null
-          cidade?: string | null
-          estado?: string | null
-          observacoes?: string | null
-          status?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          workshop_id?: string
-          nome_fantasia?: string
-          razao_social?: string | null
-          cnpj_cpf?: string | null
-          inscricao_estadual?: string | null
-          email?: string | null
-          telefone?: string | null
-          celular?: string | null
-          cep?: string | null
-          endereco?: string | null
-          numero?: string | null
-          bairro?: string | null
-          cidade?: string | null
-          estado?: string | null
-          observacoes?: string | null
-          status?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fornecedores_workshop_id_fkey"
-            columns: ["workshop_id"]
-            isOneToOne: false
-            referencedRelation: "workshops"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       ordens_servico: {
         Row: {
           cliente_id: string
@@ -528,6 +454,77 @@ export type Database = {
         }
         Relationships: []
       }
+      print_layouts: {
+        Row: {
+          created_at: string
+          custom_footer: string | null
+          custom_header: string | null
+          font_size: string
+          id: string
+          is_default: boolean
+          name: string
+          paper_width: string
+          show_customer: boolean
+          show_items: boolean
+          show_logo: boolean
+          show_signatures: boolean
+          show_totals: boolean
+          show_vehicle: boolean
+          spacing: string
+          type: string
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_footer?: string | null
+          custom_header?: string | null
+          font_size?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          paper_width?: string
+          show_customer?: boolean
+          show_items?: boolean
+          show_logo?: boolean
+          show_signatures?: boolean
+          show_totals?: boolean
+          show_vehicle?: boolean
+          spacing?: string
+          type?: string
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_footer?: string | null
+          custom_header?: string | null
+          font_size?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          paper_width?: string
+          show_customer?: boolean
+          show_items?: boolean
+          show_logo?: boolean
+          show_signatures?: boolean
+          show_totals?: boolean
+          show_vehicle?: boolean
+          spacing?: string
+          type?: string
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_layouts_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -551,6 +548,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      saas_contratos: {
+        Row: {
+          assinatura_imagem: string | null
+          assinatura_ip: string | null
+          conteudo_html: string
+          created_at: string
+          data_assinatura: string | null
+          id: string
+          status: string
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          assinatura_imagem?: string | null
+          assinatura_ip?: string | null
+          conteudo_html: string
+          created_at?: string
+          data_assinatura?: string | null
+          id?: string
+          status: string
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          assinatura_imagem?: string | null
+          assinatura_ip?: string | null
+          conteudo_html?: string
+          created_at?: string
+          data_assinatura?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_contratos_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       troca_oleo: {
         Row: {
@@ -873,7 +914,6 @@ export type Database = {
           plan: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores: number
           slug: string
-          support_enabled: boolean
           trial_ends_at: string
           updated_at: string
         }
@@ -886,7 +926,6 @@ export type Database = {
           plan?: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores?: number
           slug: string
-          support_enabled?: boolean
           trial_ends_at?: string
           updated_at?: string
         }
@@ -899,7 +938,6 @@ export type Database = {
           plan?: Database["public"]["Enums"]["workshop_plan"]
           quantidade_elevadores?: number
           slug?: string
-          support_enabled?: boolean
           trial_ends_at?: string
           updated_at?: string
         }
