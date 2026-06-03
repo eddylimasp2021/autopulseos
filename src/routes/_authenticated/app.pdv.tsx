@@ -142,6 +142,12 @@ function Page() {
   const [modalRecibosOpen, setModalRecibosOpen] = useState(false);
   const [sangriaValor, setSangriaValor] = useState("");
   const [sangriaObs, setSangriaObs] = useState("");
+  
+  const [filtroMesRecibos, setFiltroMesRecibos] = useState<string>(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 7);
+  });
   const [reforcoValor, setReforcoValor] = useState("");
   const [reforcoObs, setReforcoObs] = useState("");
   const [modoDevolucao, setModoDevolucao] = useState(false);
@@ -153,8 +159,8 @@ function Page() {
   });
 
   const { data: recibosHistory = [], isLoading: loadingRecibos } = useQuery({
-    queryKey: ["pdv-historico-recibos"],
-    queryFn: () => mListRecibos(),
+    queryKey: ["pdv-historico-recibos", filtroMesRecibos],
+    queryFn: () => mListRecibos(filtroMesRecibos),
     enabled: modalRecibosOpen
   });
 
@@ -630,8 +636,23 @@ function Page() {
 
       <Dialog open={modalRecibosOpen} onOpenChange={setModalRecibosOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Cupons Emitidos (2ª Via)</DialogTitle></DialogHeader>
-          <div className="flex-1 overflow-y-auto mt-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" /> Cupons Emitidos (2ª Via)
+              </span>
+              <div className="flex items-center gap-2 font-normal text-sm pr-6">
+                <span className="text-muted-foreground text-xs">Mês:</span>
+                <Input 
+                  type="month" 
+                  value={filtroMesRecibos} 
+                  onChange={e => setFiltroMesRecibos(e.target.value)}
+                  className="w-36 h-8 text-xs"
+                />
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto mt-2">
             {loadingRecibos ? (
               <div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
             ) : recibosHistory.length === 0 ? (

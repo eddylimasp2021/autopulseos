@@ -109,16 +109,31 @@ export const finalizarVenda = createServerFn({ method: "POST" })
     return { ok: true, total, subtotal, desconto, troco, lancamentos_ids: lancs.map((l:any) => l.id), venda: vendaSnapshot };
   });
 
-export const listarVendasPdv = createServerFn({ method: "GET" }).handler(async ({ context }) => {
-  const { supabase } = context as any;
-  const { data, error } = await supabase
-    .from("pdv_vendas")
-    .select("*, clientes(nome, cpf_cnpj)")
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (error) throw new Error(error.message);
-  return data ?? [];
-});
+export const listarVendasPdv = createServerFn({ method: "GET" })
+  .inputValidator((dateFilter: string | undefined) => dateFilter)
+  .handler(async ({ data: dateFilter, context }) => {
+    const { supabase } = context as any;
+    let query = supabase.from("pdv_vendas").select("*, clientes(nome, cpf_cnpj)").order("created_at", { ascending: false });
+    
+    if (dateFilter) {
+      if (dateFilter.length === 7) { // YYYY-MM
+        const start = new Date(`${dateFilter}-01T00:00:00Z`);
+        const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59);
+        query = query.gte("created_at", start.toISOString()).lte("created_at", end.toISOString());
+      } else if (dateFilter.length === 10) { // YYYY-MM-DD
+        const start = new Date(`${dateFilter}T00:00:00-03:00`);
+        const end = new Date(`${dateFilter}T23:59:59-03:00`);
+        query = query.gte("created_at", start.toISOString()).lte("created_at", end.toISOString());
+      }
+    } else {
+      // By default, just limit to recent ones if no filter
+      query = query.limit(50);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
 
 export const verificarCaixaAberto = createServerFn({ method: "GET" }).handler(async ({ context }) => {
   const { supabase } = context as any;
