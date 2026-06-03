@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, Users, Building, CreditCard, Search, Edit3, Calendar,
   AlertTriangle, Lock, Unlock, ArrowUpRight, HelpCircle, Loader2, CheckCircle2,
-  Trash2, Save, Server, Webhook, Wallet, CheckCircle, Zap, MonitorPlay, FileSignature, Printer, MessageCircle, FileText, FileCheck, X
+  Trash2, Save, Server, Webhook, Wallet, CheckCircle, Zap, MonitorPlay, FileSignature, Printer, MessageCircle, FileText, FileCheck, X, Plus
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
