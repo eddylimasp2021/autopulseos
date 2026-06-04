@@ -116,25 +116,29 @@ export function generateReceiptHtml(
     } else {
       // Real Cupom Data
       const cupom = data as CupomData;
-      html += `<div class="center">Data: ${cupom.data}</div>`;
-      if (cupom.operador) html += `<div class="center">Operador: ${cupom.operador}</div>`;
+      html += `<div class="center" style="font-size: ${baseFontSize - 2}px;">Emissão: ${cupom.data}</div>`;
+      html += getDashedLine();
+      html += `<div class="center bold" style="font-size: ${baseFontSize}px; margin-bottom: ${paddingY}px;">CUPOM NÃO FISCAL</div>`;
+      html += `<div class="center" style="font-size: ${baseFontSize - 2}px; margin-bottom: ${paddingY}px;">DETALHAMENTO DA COMPRA</div>`;
       html += getDashedLine();
 
       html += `<table>`;
       if (layout.template_base !== 'minimalista' && layout.template_base !== 'compacto') {
-        html += `<thead><tr><th style="padding-bottom: 4px;">Descrição / Qtd x Unit.</th><th class="right" style="padding-bottom: 4px;">Total</th></tr></thead>`;
+        html += `<thead><tr style="font-size: ${baseFontSize - 2}px; text-transform: uppercase;"><th style="padding-bottom: 4px;" colspan="3">Código - Descrição</th></tr></thead>`;
       }
       html += `<tbody>`;
       
-      cupom.itens.forEach(item => {
+      cupom.itens.forEach((item, i) => {
+        const cod = String(i + 1).padStart(3, '0');
         if (layout.template_base === 'minimalista' || layout.template_base === 'compacto') {
-          html += `<tr><td>${item.qtd}x ${item.nome}</td><td class="right">${brl(item.preco * item.qtd)}</td></tr>`;
+          html += `<tr style="font-size: ${baseFontSize - 1}px;"><td style="padding-right: 4px;">${cod}</td><td>${item.nome}</td><td class="right">${item.qtd}x ${brl(item.preco)} = ${brl(item.preco * item.qtd)}</td></tr>`;
         } else {
           html += `
-            <tr><td colspan="2" style="font-weight: bold; padding-top: 5px;">${item.nome}</td></tr>
-            <tr style="border-bottom: 1px dashed #ccc;">
-              <td style="color: #444; padding-bottom: 5px; font-size: 11px;">${Number(item.qtd)}x ${brl(item.preco)}</td>
-              <td class="right" style="padding-bottom: 5px; font-size: 11px;">${brl(item.preco * item.qtd)}</td>
+            <tr><td colspan="3" style="font-weight: bold; padding-top: 6px; font-size: ${baseFontSize - 1}px;">${cod} - ${item.nome}</td></tr>
+            <tr style="border-bottom: 1px dashed #e5e5e5;">
+              <td style="color: #333; padding-bottom: 6px; font-size: ${baseFontSize - 2}px;">QTD: ${Number(item.qtd)} UN</td>
+              <td style="color: #333; padding-bottom: 6px; font-size: ${baseFontSize - 2}px;">VL UN: ${brl(item.preco)}</td>
+              <td class="right bold" style="padding-bottom: 6px; font-size: ${baseFontSize - 1}px;">${brl(item.preco * item.qtd)}</td>
             </tr>
           `;
         }
@@ -162,9 +166,24 @@ export function generateReceiptHtml(
       }
       html += `</table>`;
 
+      // Tributos Aproximados (Lei 12.741/2012)
+      const tribAprox = cupom.total * 0.18; // 18% baseline approx
+      html += getDashedLine();
+      html += `<div class="center" style="font-size: ${baseFontSize - 2}px; line-height: 1.4;">`;
+      html += `Informação dos Tributos Totais Incidentes<br>(Lei Federal 12.741/2012)<br>`;
+      html += `Tributos Aproximados: ${brl(tribAprox)} (18,00%)<br>`;
+      html += `Fonte: IBPT</div>`;
+
+      // Placeholder QR Code NFC-e style
+      html += getDashedLine();
+      html += `<div class="center bold" style="font-size: ${baseFontSize - 1}px; margin-bottom: 10px;">Consulte via Leitor de QR Code</div>`;
+      html += `<div style="margin: 0 auto 10px; width: 120px; height: 120px; border: 2px solid #000; padding: 4px; display: flex; align-items: center; justify-content: center; background: repeating-linear-gradient(45deg, #000, #000 2px, #fff 2px, #fff 4px);">
+        <div style="background: #fff; padding: 5px; border: 2px solid #000; font-size: 10px; font-weight: bold; text-align: center; text-transform: uppercase;">QR CODE<br>NÃO FISCAL</div>
+      </div>`;
+
       if (layout.mostrar_obs && cupom.observacao) {
         html += getDashedLine();
-        html += `<div><strong>Obs:</strong> ${cupom.observacao}</div>`;
+        html += `<div><strong style="font-size: ${baseFontSize - 1}px;">Observações:</strong><br><span style="font-size: ${baseFontSize - 2}px;">${cupom.observacao}</span></div>`;
       }
     }
   } else {
@@ -173,9 +192,17 @@ export function generateReceiptHtml(
 
   if (layout.mostrar_rodape) {
     html += getDashedLine();
-    html += `<div class="center" style="margin-top: ${10 + paddingY}px;">OBRIGADO PELA PREFERÊNCIA!</div>`;
+    html += `<div class="center bold" style="margin-top: ${10 + paddingY}px; font-size: ${baseFontSize + 1}px;">OBRIGADO PELA PREFERÊNCIA!</div>`;
+    
+    if (layout.tipo_cupom === 'venda' && data !== 'mock') {
+        const c = data as CupomData;
+        if (c.operador) {
+            html += `<div class="center" style="font-size: ${baseFontSize - 2}px; margin-top: 5px; color: #333;">Operador(a): ${c.operador}</div>`;
+        }
+    }
+    
     if (layout.rodape) {
-      html += `<div class="center" style="margin-top: ${paddingY}px; white-space: pre-wrap;">${layout.rodape}</div>`;
+      html += `<div class="center" style="margin-top: ${paddingY}px; white-space: pre-wrap; font-size: ${baseFontSize - 2}px; color: #444;">${layout.rodape}</div>`;
     }
   }
 
