@@ -454,6 +454,79 @@ export type Database = {
         }
         Relationships: []
       }
+      pdv_vendas: {
+        Row: {
+          caixa_id: string | null
+          cliente_id: string | null
+          created_at: string
+          desconto: number
+          id: string
+          itens: Json
+          observacao: string | null
+          operador_nome: string
+          pagamentos: Json
+          subtotal: number
+          total: number
+          troco: number
+          updated_at: string
+          workshop_id: string
+        }
+        Insert: {
+          caixa_id?: string | null
+          cliente_id?: string | null
+          created_at?: string
+          desconto: number
+          id?: string
+          itens: Json
+          observacao?: string | null
+          operador_nome: string
+          pagamentos: Json
+          subtotal: number
+          total: number
+          troco: number
+          updated_at?: string
+          workshop_id: string
+        }
+        Update: {
+          caixa_id?: string | null
+          cliente_id?: string | null
+          created_at?: string
+          desconto?: number
+          id?: string
+          itens?: Json
+          observacao?: string | null
+          operador_nome?: string
+          pagamentos?: Json
+          subtotal?: number
+          total?: number
+          troco?: number
+          updated_at?: string
+          workshop_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pdv_vendas_caixa_id_fkey"
+            columns: ["caixa_id"]
+            isOneToOne: false
+            referencedRelation: "pdv_caixas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pdv_vendas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pdv_vendas_workshop_id_fkey"
+            columns: ["workshop_id"]
+            isOneToOne: false
+            referencedRelation: "workshops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       print_layouts: {
         Row: {
           created_at: string
