@@ -1,0 +1,29 @@
+{
+  "short_name": "Autopulse",
+  "name": "Autopulse OS",
+  "description": "Sistema completo para gestão de oficinas e centros automotivos",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/app",
+  "background_color": "#09090b",
+  "display": "standalone",
+  "theme_color": "#6366f1"
+}

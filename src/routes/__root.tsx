@@ -87,8 +87,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:description", content: "Plataforma all-in-one para oficinas mecânicas, troca de óleo e centros automotivos. Gestão de OS, estoque, financeiro, PDV, WhatsApp e IA." },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8iPVxg347Vf701SCCZ5EYNVI1y63/social-images/social-1779823675021-AutoPulse_Os.webp" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/8iPVxg347Vf701SCCZ5EYNVI1y63/social-images/social-1779823675021-AutoPulse_Os.webp" },
+      { name: "theme-color", content: "#6366f1" },
     ],
     links: [
+      { rel: "manifest", href: "/manifest.json" },
+      { rel: "apple-touch-icon", href: "/icon.svg" },
       {
         rel: "stylesheet",
         href: appCss,
@@ -97,6 +100,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" },
     ],
+    scripts: [
+      {
+        type: "text/javascript",
+        children: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+              navigator.serviceWorker.register('/sw.js').catch(err => {
+                console.log('SW registration failed: ', err);
+              });
+            });
+          }
+        `
+      }
+    ]
   }),
   shellComponent: RootShell,
   component: RootComponent,
