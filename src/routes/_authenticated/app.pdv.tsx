@@ -259,46 +259,47 @@ function Page() {
 
   const addToCart = (p: Produto) => {
     if (!modoDevolucao && Number(p.quantidade) <= 0) {
-      toast.error(`${p.nome} sem estoque disponível`);
-      return;
+      toast.warning(`${p.nome} sem estoque, o saldo ficará negativo.`);
     }
     setCart(prev => {
       const qtyToAdd = modoDevolucao ? -1 : 1;
       const ex = prev.find(x => x.id === p.id);
       if (ex) {
         if (!modoDevolucao && ex.qtd + 1 > ex.estoque) {
-          toast.error(`Estoque máximo de ${ex.estoque} para ${ex.nome}`);
-          return prev;
+          toast.warning(`Estoque insuficiente de ${ex.nome}, o saldo ficará negativo.`);
         }
         return prev.map(x => x.id === p.id ? { ...x, qtd: x.qtd + qtyToAdd } : x);
       }
       return [...prev, { id: p.id, nome: p.nome, preco: Number(p.preco_venda), qtd: qtyToAdd, estoque: Number(p.quantidade) }];
     });
   };
-  const updateQtd = (id: string, delta: number) =>
+
+  const updateQtd = (id: string, delta: number) => {
+    const item = cart.find(x => x.id === id);
+    if (item && !modoDevolucao && item.qtd + delta > item.estoque) {
+      toast.warning("Estoque insuficiente", { description: "O saldo ficará negativo." });
+    }
     setCart(prev => prev.map(x => {
       if (x.id !== id) return x;
       const next = x.qtd + delta;
-      if (!modoDevolucao && next > x.estoque) {
-        toast.warning("Estoque insuficiente", { description: `Restam apenas ${x.estoque} unidades.` });
-        return x;
-      }
       if (next === 0) return { ...x, qtd: delta > 0 ? 1 : -1 }; // Skip 0
       return { ...x, qtd: next };
     }));
+  };
 
   const setQtd = (id: string, value: number) => {
     if (isNaN(value)) return;
+    const item = cart.find(x => x.id === id);
+    if (item && !modoDevolucao && value > item.estoque) {
+      toast.warning("Estoque insuficiente", { description: "O saldo ficará negativo." });
+    }
     setCart(prev => prev.map(x => {
       if (x.id !== id) return x;
       if (value === 0) return x; // Skip 0
-      if (!modoDevolucao && value > x.estoque) {
-        toast.warning("Estoque insuficiente", { description: `Restam apenas ${x.estoque} unidades.` });
-        return { ...x, qtd: x.estoque };
-      }
       return { ...x, qtd: value };
     }));
   };
+
   const removeItem = (id: string) => setCart(prev => prev.filter(x => x.id !== id));
   const limparCarrinho = () => { 
     setCart([]); setDescontoStr(""); setRecebidoStr(""); setObservacao(""); 
