@@ -421,6 +421,37 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const podeFinalizar = cart.length > 0 && !mFinalizar.isPending && total > 0 && 
+    (isPagamentoMultiplo 
+      ? faltaPagarMultiplo <= 0 
+      : (formaPagamento !== "dinheiro" || recebido >= total));
+
+  const pagamentos: { key: FormaPagamento; label: string; icon: typeof QrCode; hint?: string }[] = [
+    { key: "pix", label: "PIX", icon: QrCode, hint: "Atalho F3" },
+    { key: "dinheiro", label: "Dinheiro", icon: Banknote, hint: "Atalho F4" },
+    { key: "cartao_credito", label: "Crédito", icon: CreditCard, hint: "Atalho F5" },
+    { key: "cartao_debito", label: "Débito", icon: Wallet, hint: "Atalho F6" },
+  ];
+
+  useEffect(() => {
+    if (!caixaAtual) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F2") { e.preventDefault(); buscaRef.current?.focus(); }
+      else if (e.key === "F3") { e.preventDefault(); setFormaPagamento("pix"); }
+      else if (e.key === "F4") { e.preventDefault(); setFormaPagamento("dinheiro"); }
+      else if (e.key === "F5") { e.preventDefault(); setFormaPagamento("cartao_credito"); }
+      else if (e.key === "F6") { e.preventDefault(); setFormaPagamento("cartao_debito"); }
+      else if (e.key === "F8") { e.preventDefault(); descontoRef.current?.focus(); }
+      else if (e.key === "F9") { 
+        e.preventDefault(); 
+        if (podeFinalizar && !mFinalizar.isPending) mFinalizar.mutate(); 
+      }
+      else if (e.key === "Escape") { e.preventDefault(); limparCarrinho(); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [caixaAtual, podeFinalizar, mFinalizar.isPending, mFinalizar.mutate]);
+
   if (loadingCaixa) {
     return <div className="p-8 text-center text-muted-foreground animate-pulse">Carregando módulo PDV...</div>;
   }
@@ -462,37 +493,6 @@ function Page() {
       </div>
     );
   }
-
-  const podeFinalizar = cart.length > 0 && !mFinalizar.isPending && total > 0 && 
-    (isPagamentoMultiplo 
-      ? faltaPagarMultiplo <= 0 
-      : (formaPagamento !== "dinheiro" || recebido >= total));
-
-  const pagamentos: { key: FormaPagamento; label: string; icon: typeof QrCode; hint?: string }[] = [
-    { key: "pix", label: "PIX", icon: QrCode, hint: "Atalho F3" },
-    { key: "dinheiro", label: "Dinheiro", icon: Banknote, hint: "Atalho F4" },
-    { key: "cartao_credito", label: "Crédito", icon: CreditCard, hint: "Atalho F5" },
-    { key: "cartao_debito", label: "Débito", icon: Wallet, hint: "Atalho F6" },
-  ];
-
-  useEffect(() => {
-    if (!caixaAtual) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "F2") { e.preventDefault(); buscaRef.current?.focus(); }
-      else if (e.key === "F3") { e.preventDefault(); setFormaPagamento("pix"); }
-      else if (e.key === "F4") { e.preventDefault(); setFormaPagamento("dinheiro"); }
-      else if (e.key === "F5") { e.preventDefault(); setFormaPagamento("cartao_credito"); }
-      else if (e.key === "F6") { e.preventDefault(); setFormaPagamento("cartao_debito"); }
-      else if (e.key === "F8") { e.preventDefault(); descontoRef.current?.focus(); }
-      else if (e.key === "F9") { 
-        e.preventDefault(); 
-        if (podeFinalizar && !mFinalizar.isPending) mFinalizar.mutate(); 
-      }
-      else if (e.key === "Escape") { e.preventDefault(); limparCarrinho(); }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [caixaAtual, podeFinalizar, mFinalizar.isPending, mFinalizar.mutate]);
 
   return (
     <div className="space-y-6">
