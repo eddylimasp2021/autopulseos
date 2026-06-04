@@ -13,6 +13,7 @@ export interface CupomData {
   observacao?: string;
   data: string;
   operador?: string;
+  isFiscal?: boolean;
 }
 
 function openPrintWindow(htmlContent: string) {

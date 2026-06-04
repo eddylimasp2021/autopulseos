@@ -82,6 +82,7 @@ function Page() {
   const qc = useQueryClient();
   const buscaRef = useRef<HTMLInputElement>(null);
   const descontoRef = useRef<HTMLInputElement>(null);
+  const printFiscalRef = useRef(false);
 
   // Estados locais para OS
   const [modalOSOpen, setModalOSOpen] = useState(false);
@@ -407,7 +408,8 @@ function Page() {
         troco: r.troco,
         observacao: observacao,
         data: new Date().toLocaleString("pt-BR"),
-        operador: caixaAtual?.operador_nome
+        operador: caixaAtual?.operador_nome,
+        isFiscal: printFiscalRef.current
       });
 
       if (importedOsId) {
@@ -677,25 +679,48 @@ function Page() {
                       <td className="p-3 tabular-nums font-medium">{Number(v.total).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</td>
                       <td className="p-3">{v.operador_nome}</td>
                       <td className="p-3 text-right">
-                        <Button 
-                          variant="outline" size="sm" className="h-8 gap-2"
-                          onClick={() => {
-                            imprimirCupomNaoFiscal({
-                              itens: v.itens,
-                              total: Number(v.total),
-                              subtotal: Number(v.subtotal),
-                              desconto: Number(v.desconto),
-                              valorRecebido: Number(v.total) + Number(v.troco),
-                              troco: Number(v.troco),
-                              pagamentos: v.pagamentos,
-                              clienteNome: v.clientes?.nome,
-                              clienteCpfCnpj: v.clientes?.cpf_cnpj,
-                              observacao: v.observacao || undefined
-                            });
-                          }}
-                        >
-                          <Receipt className="h-3.5 w-3.5" /> Reimprimir
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button 
+                            variant="outline" size="sm" className="h-8 gap-2"
+                            onClick={() => {
+                              imprimirCupomNaoFiscal({
+                                itens: v.itens,
+                                total: Number(v.total),
+                                subtotal: Number(v.subtotal),
+                                desconto: Number(v.desconto),
+                                valorRecebido: Number(v.total) + Number(v.troco),
+                                troco: Number(v.troco),
+                                pagamentos: v.pagamentos,
+                                clienteNome: v.clientes?.nome,
+                                clienteCpfCnpj: v.clientes?.cpf_cnpj,
+                                observacao: v.observacao || undefined,
+                                isFiscal: false
+                              });
+                            }}
+                          >
+                            <Receipt className="h-3.5 w-3.5" /> N. Fiscal
+                          </Button>
+                          <Button 
+                            variant="default" size="sm" className="h-8 gap-2"
+                            onClick={() => {
+                              imprimirCupomNaoFiscal({
+                                itens: v.itens,
+                                total: Number(v.total),
+                                subtotal: Number(v.subtotal),
+                                desconto: Number(v.desconto),
+                                valorRecebido: Number(v.total) + Number(v.troco),
+                                troco: Number(v.troco),
+                                pagamentos: v.pagamentos,
+                                clienteNome: v.clientes?.nome,
+                                clienteCpfCnpj: v.clientes?.cpf_cnpj,
+                                observacao: v.observacao || undefined,
+                                isFiscal: true
+                              });
+                            }}
+                          >
+                            <Receipt className="h-3.5 w-3.5" /> Fiscal
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1114,7 +1139,7 @@ function Page() {
                         </>
                       ) : (
                         <>
-                          <span className="text-emerald-500 font-medium">Pago</span>
+                  <span className="text-emerald-500 font-medium">Pago</span>
                           <span className="font-semibold tabular-nums text-emerald-500 text-sm">{brl(totalPagoMultiplo)}</span>
                         </>
                       )}
@@ -1125,7 +1150,7 @@ function Page() {
             )}
             
             {cart.length > 0 && (
-              <div className="mt-4 pt-3 border-t border-border/40">
+              <div className="mt-4 pt-3 border-t border-border/40 mb-4">
                 <label className="text-xs text-muted-foreground font-medium">Observação (opcional)</label>
                 <input
                   type="text"
@@ -1139,23 +1164,43 @@ function Page() {
             )}
           </div>
 
-          <button 
-            onClick={() => {
-              if (!isPagamentoMultiplo && tefConfig?.ativo && ["pix", "cartao_credito", "cartao_debito"].includes(formaPagamento)) {
-                setTefValor(total);
-                setTefTipo(formaPagamento);
-                setTefPagamentoAdicionado(null);
-                setTefDialogOpen(true);
-              } else {
-                mFinalizar.mutate();
-              }
-            }} 
-            disabled={!podeFinalizar} 
-            className="w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_24px_-4px_oklch(0.65_0.18_240/0.5)] flex items-center justify-center gap-2"
-          >
-            <Receipt className="h-4 w-4" />
-            {mFinalizar.isPending ? "Processando…" : cart.length === 0 ? "Adicione produtos" : `Finalizar Venda (F9) — ${brl(total)}`}
-          </button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              onClick={() => {
+                printFiscalRef.current = false;
+                if (!isPagamentoMultiplo && tefConfig?.ativo && ["pix", "cartao_credito", "cartao_debito"].includes(formaPagamento)) {
+                  setTefValor(total);
+                  setTefTipo(formaPagamento);
+                  setTefPagamentoAdicionado(null);
+                  setTefDialogOpen(true);
+                } else {
+                  mFinalizar.mutate();
+                }
+              }}
+              disabled={mFinalizar.isPending || !caixaAtual || cart.length === 0}
+              className="flex-1 border-primary text-primary hover:bg-primary/5 h-12 text-sm"
+            >
+              Finalizar (Não Fiscal)
+            </Button>
+            <Button 
+              onClick={() => {
+                printFiscalRef.current = true;
+                if (!isPagamentoMultiplo && tefConfig?.ativo && ["pix", "cartao_credito", "cartao_debito"].includes(formaPagamento)) {
+                  setTefValor(total);
+                  setTefTipo(formaPagamento);
+                  setTefPagamentoAdicionado(null);
+                  setTefDialogOpen(true);
+                } else {
+                  mFinalizar.mutate();
+                }
+              }}
+              disabled={mFinalizar.isPending || !caixaAtual || cart.length === 0}
+              className="flex-1 h-12 text-sm"
+            >
+              {mFinalizar.isPending ? "Finalizando..." : "Finalizar (Fiscal)"}
+            </Button>
+          </div>
           
           <div className="flex flex-wrap justify-center gap-4 mt-4 pt-4 border-t border-border/40 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
             <span className="flex items-center gap-1"><Keyboard className="h-3 w-3" /> F2: Buscar</span>
