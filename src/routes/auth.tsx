@@ -7,7 +7,19 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Zap } from "lucide-react";
 
-export const Route = createFileRoute("/auth")({ component: AuthPage });
+export const Route = createFileRoute("/auth")({
+  component: AuthPage,
+  head: () => ({
+    meta: [
+      { title: "Entrar | GaragemOS" },
+      { name: "description", content: "Acesse ou recupere sua conta do GaragemOS." },
+      { property: "og:title", content: "Entrar | GaragemOS" },
+      { property: "og:description", content: "Acesse ou recupere sua conta do GaragemOS." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+});
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -20,10 +32,13 @@ function AuthPage() {
 
   useEffect(() => {
     // Se o link de recuperação cair aqui, encaminha para a tela de nova senha
-    const hash = typeof window !== "undefined" ? window.location.hash : "";
-    const isRecovery = hash.includes("type=recovery");
+    const hash = window.location.hash;
+    const search = window.location.search;
+    const isRecovery = hash.includes("type=recovery") || new URLSearchParams(search).has("code");
     if (isRecovery) {
-      navigate({ to: "/reset-password", replace: true });
+      // Preserve the recovery credentials while moving legacy links from /auth.
+      // A client-side route transition would discard the URL fragment.
+      window.location.replace(`/reset-password${search}${hash}`);
       return;
     }
 
