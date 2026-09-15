@@ -19,7 +19,19 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    // Se o link de recuperação cair aqui, encaminha para a tela de nova senha
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    const isRecovery = hash.includes("type=recovery");
+    if (isRecovery) {
+      navigate({ to: "/reset-password", replace: true });
+      return;
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        navigate({ to: "/reset-password", replace: true });
+        return;
+      }
       if (session) navigate({ to: "/app", replace: true });
     });
     supabase.auth.getUser().then(({ data }) => { if (data.user) navigate({ to: "/app", replace: true }); });
@@ -43,7 +55,7 @@ function AuthPage() {
         setMode("login");
       } else if (mode === "recovery") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + "/auth",
+          redirectTo: window.location.origin + "/reset-password",
         });
         if (error) throw error;
         toast.success("E-mail de recuperação enviado! Verifique sua caixa de entrada.");
