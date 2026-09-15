@@ -161,7 +161,7 @@ function Page() {
 
   const { data: recibosHistory = [], isLoading: loadingRecibos } = useQuery({
     queryKey: ["pdv-historico-recibos", filtroMesRecibos],
-    queryFn: () => mListRecibos(filtroMesRecibos),
+    queryFn: () => mListRecibos({ data: filtroMesRecibos }),
     enabled: modalRecibosOpen
   });
 
@@ -688,12 +688,11 @@ function Page() {
                                 total: Number(v.total),
                                 subtotal: Number(v.subtotal),
                                 desconto: Number(v.desconto),
-                                valorRecebido: Number(v.total) + Number(v.troco),
+                                recebido: Number(v.total) + Number(v.troco),
                                 troco: Number(v.troco),
                                 pagamentos: v.pagamentos,
-                                clienteNome: v.clientes?.nome,
-                                clienteCpfCnpj: v.clientes?.cpf_cnpj,
                                 observacao: v.observacao || undefined,
+                                data: v.created_at,
                                 isFiscal: false
                               });
                             }}
@@ -708,12 +707,11 @@ function Page() {
                                 total: Number(v.total),
                                 subtotal: Number(v.subtotal),
                                 desconto: Number(v.desconto),
-                                valorRecebido: Number(v.total) + Number(v.troco),
+                                recebido: Number(v.total) + Number(v.troco),
                                 troco: Number(v.troco),
                                 pagamentos: v.pagamentos,
-                                clienteNome: v.clientes?.nome,
-                                clienteCpfCnpj: v.clientes?.cpf_cnpj,
                                 observacao: v.observacao || undefined,
+                                data: v.created_at,
                                 isFiscal: true
                               });
                             }}

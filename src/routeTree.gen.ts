@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
@@ -35,6 +36,11 @@ import { Route as ApiPublicWebhooksPaymentRouteImport } from './routes/api/publi
 import { Route as ApiPublicCronWhatsappDispatchRouteImport } from './routes/api/public/cron/whatsapp-dispatch'
 import { Route as ApiPublicCronDailyRemindersRouteImport } from './routes/api/public/cron/daily-reminders'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -177,6 +183,7 @@ const ApiPublicCronDailyRemindersRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/app/agenda': typeof AuthenticatedAppAgendaRoute
   '/app/assinatura': typeof AuthenticatedAppAssinaturaRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/app/agenda': typeof AuthenticatedAppAgendaRoute
   '/app/assinatura': typeof AuthenticatedAppAssinaturaRoute
   '/app/clientes': typeof AuthenticatedAppClientesRoute
@@ -230,6 +238,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/_authenticated/app/agenda': typeof AuthenticatedAppAgendaRoute
   '/_authenticated/app/assinatura': typeof AuthenticatedAppAssinaturaRoute
@@ -258,6 +267,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/reset-password'
     | '/app'
     | '/app/agenda'
     | '/app/assinatura'
@@ -284,6 +294,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/reset-password'
     | '/app/agenda'
     | '/app/assinatura'
     | '/app/clientes'
@@ -310,6 +321,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/reset-password'
     | '/_authenticated/app'
     | '/_authenticated/app/agenda'
     | '/_authenticated/app/assinatura'
@@ -338,6 +350,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ApiPublicCronDailyRemindersRoute: typeof ApiPublicCronDailyRemindersRoute
   ApiPublicCronWhatsappDispatchRoute: typeof ApiPublicCronWhatsappDispatchRoute
   ApiPublicWebhooksPaymentRoute: typeof ApiPublicWebhooksPaymentRoute
@@ -345,6 +358,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -584,6 +604,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AuthRoute: AuthRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ApiPublicCronDailyRemindersRoute: ApiPublicCronDailyRemindersRoute,
   ApiPublicCronWhatsappDispatchRoute: ApiPublicCronWhatsappDispatchRoute,
   ApiPublicWebhooksPaymentRoute: ApiPublicWebhooksPaymentRoute,
