@@ -23,19 +23,44 @@ export const Route = createFileRoute("/reset-password")({
 
 function ResetPasswordPage() {
   const navigate = useNavigate();
-  const [ready, setReady] = useState(false);
+  const [status, setStatus] = useState<"checking" | "ready" | "invalid">("checking");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || session) setReady(true);
+      if (active && (event === "PASSWORD_RECOVERY" || session)) setStatus("ready");
     });
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true);
-    });
-    return () => subscription.unsubscribe();
+
+    async function validateRecoveryLink() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!active) return;
+        if (error) {
+          setStatus("invalid");
+          return;
+        }
+        window.history.replaceState({}, "", "/reset-password");
+        setStatus("ready");
+        return;
+      }
+
+      const { data, error } = await supabase.auth.getSession();
+      if (!active) return;
+      setStatus(!error && data.session ? "ready" : "invalid");
+    }
+
+    void validateRecoveryLink();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -72,7 +97,9 @@ function ResetPasswordPage() {
           </div>
         </div>
 
-        {!ready ? (
+        {status === "checking" ? (
+          <p className="text-sm text-muted-foreground">Validando seu link de recuperação...</p>
+        ) : status === "invalid" ? (
           <div className="space-y-4 text-sm text-muted-foreground">
             <p>Este link de recuperação é inválido ou expirou.</p>
             <Button variant="outline" className="w-full" onClick={() => navigate({ to: "/auth" })}>
