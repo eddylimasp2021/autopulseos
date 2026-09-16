@@ -35,25 +35,45 @@ function ResetPasswordPage() {
       if (active && (event === "PASSWORD_RECOVERY" || session)) setStatus("ready");
     });
 
-    async function validateRecoveryLink() {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
+    const clean = () => window.history.replaceState({}, "", "/reset-password");
 
+    async function validateRecoveryLink() {
+      const search = new URLSearchParams(window.location.search);
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+      // 1) PKCE / código na query
+      const code = search.get("code");
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (!active) return;
-        if (error) {
-          setStatus("invalid");
-          return;
-        }
-        window.history.replaceState({}, "", "/reset-password");
-        setStatus("ready");
-        return;
+        if (!error) { clean(); setStatus("ready"); return; }
       }
 
-      const { data, error } = await supabase.auth.getSession();
-      if (!active) return;
-      setStatus(!error && data.session ? "ready" : "invalid");
+      // 2) Tokens no fragmento (#access_token=...&type=recovery)
+      const access_token = hash.get("access_token");
+      const refresh_token = hash.get("refresh_token");
+      if (access_token && refresh_token) {
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (!active) return;
+        if (!error) { clean(); setStatus("ready"); return; }
+      }
+
+      // 3) Link com token_hash (verificação por OTP)
+      const token_hash = search.get("token_hash") ?? hash.get("token_hash");
+      if (token_hash) {
+        const { error } = await supabase.auth.verifyOtp({ type: "recovery", token_hash });
+        if (!active) return;
+        if (!error) { clean(); setStatus("ready"); return; }
+      }
+
+      // 4) Sessão já estabelecida (pode demorar alguns ciclos no preview)
+      for (let i = 0; i < 8; i++) {
+        const { data } = await supabase.auth.getSession();
+        if (!active) return;
+        if (data.session) { setStatus("ready"); return; }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      if (active) setStatus("invalid");
     }
 
     void validateRecoveryLink();
