@@ -120,8 +120,29 @@ function ResetPasswordPage() {
         {status === "checking" ? (
           <p className="text-sm text-muted-foreground">Validando seu link de recuperação...</p>
         ) : status === "invalid" ? (
-          <div className="space-y-4 text-sm text-muted-foreground">
-            <p>Este link de recuperação é inválido ou expirou.</p>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Este link de recuperação é inválido, já foi usado ou expirou. Informe seu e-mail para receber um novo link.
+            </p>
+            <div className="space-y-2">
+              <Label>E-mail</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@exemplo.com" />
+            </div>
+            <Button
+              className="w-full bg-[image:var(--gradient-neon)] text-neon-foreground hover:opacity-90 neon-border"
+              disabled={loading || !email}
+              onClick={async () => {
+                setLoading(true);
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: window.location.origin + "/reset-password",
+                });
+                setLoading(false);
+                if (error) toast.error(error.message);
+                else toast.success("Novo link enviado! Verifique sua caixa de entrada e o spam.");
+              }}
+            >
+              {loading ? "..." : "Enviar novo link"}
+            </Button>
             <Button variant="outline" className="w-full" onClick={() => navigate({ to: "/auth" })}>
               Voltar para o login
             </Button>
